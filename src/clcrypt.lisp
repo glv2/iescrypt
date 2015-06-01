@@ -19,11 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 This program encrypts and decrypts files.
 
 Cipher: threefish512 (counter mode)
-Key derivation: pbkdf2 (10000 iterations of skein512)
+Key derivation: pbkdf2 (1000 iterations of skein512)
 Message authentication code: skein-mac (512/512)
 
-Encrypted file format (sizes are in bytes):
-| salt (16) | mac (64) | tweak (16) | iv (64) | ciphertext |
+Encrypted file format:
+| salt (16 B) | tweak (16 B) | iv (64 B) | mac (64 B) | block | ... | block |
+
+Format of a block:
+| cipertext (1 MiB) | mac (64 B) |
 
 |#
 
@@ -37,8 +40,8 @@ Encrypted file format (sizes are in bytes):
                 make-prng
                 random-data
                 make-cipher
-                encrypt
-                decrypt
+                encrypt-in-place
+                decrypt-in-place
                 make-skein-mac
                 update-skein-mac
                 skein-mac-digest)
@@ -64,22 +67,19 @@ Encrypted file format (sizes are in bytes):
 (defparameter *block-length* (block-length *cipher*))
 (defparameter *tweak-length* 16)
 (defparameter *salt-length* 16)
-(defparameter *iterations* 10000)
+(defparameter *iterations* 1000)
 (defparameter *mac-length* (digest-length *digest*))
-(defparameter *header-length* (+ *salt-length* *mac-length* *tweak-length* *block-length*))
-(defparameter *buffer-size* 32768)
-(defparameter *block-batch* (max 1 (ceiling *buffer-size* *block-length*)))
+(defparameter *header-length* (+ *salt-length* *tweak-length* *block-length* *mac-length*))
+(defparameter *block-size* (* *block-length* 16384)) ; 1048576 bytes
+(defparameter *buffer-size* (/ *block-size* 32)) ; 32768 bytes
 
 (defparameter *key* nil)
 (defparameter *tweak* nil)
 (defparameter *iv* nil)
-(defparameter *salt* nil)
-(defparameter *mac* nil)
 (defparameter *input-file* nil)
 (defparameter *input-file-lock* nil)
 (defparameter *output-file* nil)
 (defparameter *output-file-lock* nil)
-(defparameter *threads* nil)
 (defparameter *boundaries* nil)
 
 
@@ -98,6 +98,7 @@ Encrypted file format (sizes are in bytes):
 (defun passphrase-to-key (passphrase salt)
   "Generate a key from a PASSPHRASE and a SALT."
   (let ((passdata (string-to-octets passphrase :encoding :utf-8)))
+
     (pbkdf2-hash-password passdata
                           :digest *digest*
                           :salt salt
@@ -112,34 +113,6 @@ Encrypted file format (sizes are in bytes):
             (setf (aref block i) (ldb (byte 8 0) sum)
                   carry (ash sum -8))))
     (values)))
-
-(defun read-header (input-file)
-  (setf *salt* (make-array *salt-length* :element-type '(unsigned-byte 8))
-        *mac* (make-array *mac-length* :element-type '(unsigned-byte 8))
-        *tweak* (make-array *tweak-length* :element-type '(unsigned-byte 8))
-        *iv* (make-array *block-length* :element-type '(unsigned-byte 8)))
-
-  (unless (= (read-sequence *salt* input-file) *salt-length*)
-    (error "Could not read the salt from the input stream."))
-  (unless (= (read-sequence *mac* input-file) *mac-length*)
-    (error "Could not read the mac from the input stream."))
-  (unless (= (read-sequence *tweak* input-file) *tweak-length*)
-    (error "Could not read the tweak from the input stream."))
-  (unless (= (read-sequence *iv* input-file) *block-length*)
-    (error "Could not read the initialization vector from the input stream."))
-  (+ *salt-length* *mac-length* *tweak-length* *block-length*))
-
-(defun write-header (output-file)
-  (let* ((prng (make-prng :fortuna :seed :random))
-         (fake-mac (random-data *mac-length* prng)))
-    (setf *salt* (random-data *salt-length* prng)
-          *tweak* (random-data *tweak-length* prng)
-          *iv* (random-data *block-length* prng))
-    (write-sequence *salt* output-file)
-    (write-sequence fake-mac output-file)
-    (write-sequence *tweak* output-file)
-    (write-sequence *iv* output-file)
-    (+ *salt-length* *mac-length* *tweak-length* *block-length*)))
 
 (defun safe-read-from-file (file lock offset buffer &key (start 0) end)
   (let (n)
@@ -158,139 +131,197 @@ Encrypted file format (sizes are in bytes):
     s))
 
 (defun encryption-thread ()
-  (let* ((current-thread (current-thread))
-         (id (parse-integer (thread-name current-thread)))
-         (start (car (aref *boundaries* id)))
-         (count (cdr (aref *boundaries* id)))
-         (iv (copy-seq *iv*))
-         cipher)
-    ;; Prepare cipher
-    (increment-counter-block iv start)
-    (setf cipher (make-cipher *cipher*
-                              :key *key*
-                              :tweak *tweak*
-                              :mode :ctr
-                              :initialization-vector iv))
+  (handler-case
+      (let* ((current-thread (current-thread))
+             (id (parse-integer (thread-name current-thread)))
+             (start (car (aref *boundaries* id)))
+             (count (cdr (aref *boundaries* id)))
+             (iv (copy-seq *iv*))
+             cipher
+             mac)
 
-    (do* ((i 0)
-          (nblocks (min count *block-batch*))
-          (offset (* start *block-length*))
-          (plaintext (make-array (* nblocks *block-length*)
-                                 :element-type '(unsigned-byte 8)
-                                 :initial-element 0))
-          (text-length 0)
-          (ciphertext (make-array (* nblocks *block-length*)
-                                  :element-type '(unsigned-byte 8)
-                                  :initial-element 0)))
-         ((= i count))
-      ;; Read plaintext blocks
-      (setf text-length
-            (safe-read-from-file *input-file*
-                                 *input-file-lock*
-                                 offset
-                                 plaintext
-                                 :end (* nblocks *block-length*)))
+        ;; Prepare cipher
+        (increment-counter-block iv (* start (/ *block-size* *block-length*)))
+        (setf cipher (make-cipher *cipher*
+                                  :key *key*
+                                  :tweak *tweak*
+                                  :mode :ctr
+                                  :initialization-vector iv))
+        (setf mac (make-skein-mac *key*
+                                  :block-length *block-length*
+                                  :digest-length *mac-length*))
 
-      ;; Encrypt plaintext
-      (encrypt cipher plaintext ciphertext :plaintext-end text-length)
+        (do ((offset-in  (* start *block-size*))
+             (offset-out (+ *header-length* (* start (+ *block-size* *mac-length*))))
+             (buffer (make-array *buffer-size* :element-type '(unsigned-byte 8)))
+             (text-length 0)
+             (end-of-file nil)
+             (buffers-by-block (/ *block-size* *buffer-size*))
+             (i 0)
+             (b 0 (1+ b)))
+            ((or (= b (* count buffers-by-block))
+                 end-of-file))
 
-      ;; Write ciphertext blocks
-      (safe-write-to-file *output-file*
-                          *output-file-lock*
-                          (+ *header-length* offset)
-                          ciphertext
-                          :end text-length)
-      (incf offset text-length)
-      (incf i nblocks)
-      (setf nblocks (min (- count i) *block-batch*)))))
+          ;; Read plaintext
+          (setf text-length (safe-read-from-file *input-file*
+                                                 *input-file-lock*
+                                                 offset-in
+                                                 buffer))
+          (when (< text-length *buffer-size*)
+            (setf end-of-file t))
+          (incf offset-in text-length)
+
+          ;; Encrypt plaintext
+          (encrypt-in-place cipher buffer :end text-length)
+          (update-skein-mac mac buffer :end text-length)
+
+          ;; Write ciphertext
+          (safe-write-to-file *output-file*
+                              *output-file-lock*
+                              offset-out
+                              buffer
+                              :end text-length)
+          (incf offset-out text-length)
+          (incf i)
+
+          (when (or (= i buffers-by-block)
+                    end-of-file)
+            ;; Write mac for current block
+            (safe-write-to-file *output-file*
+                                *output-file-lock*
+                                offset-out
+                                (skein-mac-digest mac))
+            (incf offset-out *mac-length*)
+            (reinitialize-instance mac :key *key*)
+            (setf i 0))))
+    (t (err) (progn
+               (format *error-output* "~%Error: ~a~%" err)
+               (return-from encryption-thread)))))
 
 (defun decryption-thread ()
-  (let* ((current-thread (current-thread))
-         (id (parse-integer (thread-name current-thread)))
-         (start (car (aref *boundaries* id)))
-         (count (cdr (aref *boundaries* id)))
-         (iv (copy-seq *iv*))
-         cipher)
-    ;; Prepare cipher
-    (increment-counter-block iv start)
-    (setf cipher (make-cipher *cipher*
-                              :key *key*
-                              :tweak *tweak*
-                              :mode :ctr
-                              :initialization-vector iv))
+  (handler-case
+      (let* ((current-thread (current-thread))
+             (id (parse-integer (thread-name current-thread)))
+             (start (car (aref *boundaries* id)))
+             (count (cdr (aref *boundaries* id)))
+             (iv (copy-seq *iv*))
+             cipher
+             mac)
 
-    (do* ((i 0)
-          (nblocks (min count *block-batch*))
-          (offset (* start *block-length*))
-          (ciphertext (make-array (* nblocks *block-length*)
-                                  :element-type '(unsigned-byte 8)
-                                  :initial-element 0))
-          (text-length 0)
-          (plaintext (make-array (* nblocks *block-length*)
-                                 :element-type '(unsigned-byte 8)
-                                 :initial-element 0)))
-         ((= i count))
-      ;; Read ciphertext blocks
-      (setf text-length
-            (safe-read-from-file *input-file*
-                                 *input-file-lock*
-                                 (+ *header-length* offset)
-                                 ciphertext
-                                 :end (* nblocks *block-length*)))
+        ;; Prepare cipher
+        (increment-counter-block iv (* start (/ *block-size* *block-length*)))
+        (setf cipher (make-cipher *cipher*
+                                  :key *key*
+                                  :tweak *tweak*
+                                  :mode :ctr
+                                  :initialization-vector iv))
+        (setf mac (make-skein-mac *key*
+                                  :block-length *block-length*
+                                  :digest-length *mac-length*))
 
-      ;; Decrypt ciphertext
-      (decrypt cipher ciphertext plaintext :ciphertext-end text-length)
+        (do ((offset-in (+ *header-length* (* start (+ *block-size* *mac-length*))))
+             (offset-out (* start *block-size*))
+             (buffer (make-array (+ *buffer-size* *mac-length*)
+                                 :element-type '(unsigned-byte 8)))
+             (read-length 0)
+             (text-length 0)
+             (end-of-file nil)
+             (buffers-by-block (/ *block-size* *buffer-size*))
+             (i 0)
+             (b 0 (1+ b)))
+            ((or (= b (* count buffers-by-block))
+                 end-of-file))
 
-      ;; Write plaintext blocks
-      (safe-write-to-file *output-file*
-                          *output-file-lock*
-                          offset
-                          plaintext
-                          :end text-length)
-      (incf offset text-length)
-      (incf i nblocks)
-      (setf nblocks (min (- count i) *block-batch*)))))
+          ;; Read ciphertext and mac
+          (setf read-length (safe-read-from-file *input-file*
+                                                 *input-file-lock*
+                                                 offset-in
+                                                 buffer
+                                                 :start text-length))
+          (decf read-length text-length)
+          (incf text-length read-length)
+          (when (< text-length (+ *buffer-size* *mac-length*))
+            (setf end-of-file t))
+          (incf offset-in read-length)
 
-(defun compute-mac (input-file key)
-  (do* ((mac (make-skein-mac key
-                             :block-length *block-length*
-                             :digest-length *mac-length*))
-        (buffer (make-array *buffer-size*
-                            :element-type '(unsigned-byte 8)
-                            :initial-element 0))
-        (length *buffer-size*))
-       ((zerop length) (skein-mac-digest mac))
-    (setf length (read-sequence buffer input-file))
-    (update-skein-mac mac buffer :end length)))
+          ;; Check that we have enough data for the mac
+          (when (< text-length *mac-length*)
+            (error "Could not read the mac from the input stream."))
+          (decf text-length *mac-length*)
 
-(defun encrypt-file (input-filename output-filename passphrase &optional (with-mac t))
+          ;; Decrypt ciphertext
+          (update-skein-mac mac buffer :end text-length)
+          (decrypt-in-place cipher buffer :end text-length)
+
+          ;; Write plaintext
+          (safe-write-to-file *output-file*
+                              *output-file-lock*
+                              offset-out
+                              buffer
+                              :end text-length)
+          (incf offset-out text-length)
+          (incf i)
+
+          (if (or (= i buffers-by-block)
+                  end-of-file)
+              (progn
+                ;; Check mac for current block
+                (unless (equalp (subseq buffer text-length (+ text-length *mac-length*))
+                                (skein-mac-digest mac))
+                  (error "Data corrupted."))
+                (setf text-length 0)
+                (reinitialize-instance mac :key *key*)
+                (setf i 0))
+              (progn
+                (replace buffer buffer :end1 *mac-length* :start2 text-length)
+                (setf text-length *mac-length*)))))
+    (t (err) (progn
+               (format *error-output* "~%Error: ~a~%" err)
+               (return-from decryption-thread)))))
+
+(defun encrypt-file (input-filename output-filename passphrase)
   "Read data from INPUT-FILENAME, encrypt it using PASSPHRASE and write the
 ciphertext to OUTPUT-FILENAME. If WITH-MAC is NIL, the authenticity code will
 not be computed, and will contain random data instead."
-  (let (nthreads mac nblocks)
-    (with-open-file (input-file input-filename
-                                :element-type '(unsigned-byte 8))
-      (with-open-file (output-file output-filename
-                                   :element-type'(unsigned-byte 8)
-                                   :direction :io
-                                   :if-exists :supersede)
+  (with-open-file (input-file input-filename
+                              :element-type '(unsigned-byte 8))
+    (with-open-file (output-file output-filename
+                                 :element-type'(unsigned-byte 8)
+                                 :direction :output
+                                 :if-exists :supersede)
+      (let ((prng (make-prng :fortuna :seed :random))
+            salt threads nthreads mac nblocks)
+
         (setf *input-file* input-file
               *input-file-lock* (make-lock)
               *output-file* output-file
               *output-file-lock* (make-lock))
 
-        ;; Make header (salt, fake-mac, tweak, iv)
-        (write-header *output-file*)
+        ;; Make header
+        (setf salt (random-data *salt-length* prng)
+              *tweak* (random-data *tweak-length* prng)
+              *iv* (random-data *block-length* prng))
 
         ;; Generate key
-        (setf *key* (passphrase-to-key passphrase *salt*))
+        (setf *key* (passphrase-to-key passphrase salt))
+
+        ;; Write header
+        (setf mac (make-skein-mac *key*
+                                  :block-length *block-length*
+                                  :digest-length *mac-length*))
+        (update-skein-mac mac *tweak*)
+        (update-skein-mac mac *iv*)
+        (write-sequence salt output-file)
+        (write-sequence *tweak* output-file)
+        (write-sequence *iv* output-file)
+        (write-sequence (skein-mac-digest mac) output-file)
 
         ;; Create threads
         (setf nthreads (max-number-of-threads))
-        (setf nblocks (max 1 (ceiling (file-length *input-file*) *block-length*)))
+        (setf nblocks (max 1 (ceiling (file-length *input-file*) *block-size*)))
         (when (< nblocks nthreads)
           (setf nthreads nblocks))
-        (setf *threads* (make-array nthreads))
+        (setf threads (make-array nthreads))
         (setf *boundaries* (make-array nthreads))
         (multiple-value-bind (q r)
             (floor nblocks nthreads)
@@ -300,58 +331,65 @@ not be computed, and will contain random data instead."
                                                 (if (= i (1- nthreads))
                                                     (+ q r)
                                                     q)))
-              (setf (aref *threads* i)
+              (setf (aref threads i)
                     (make-thread #'encryption-thread :name name)))))
 
         ;; Wait for threads to finish
         (dotimes (i nthreads)
-          (join-thread (aref *threads* i)))
-
-        ;; Compute message authentication code
-        (when with-mac
-          (file-position *output-file* (+ *salt-length* *mac-length*))
-          (setf mac (compute-mac *output-file* *key*))
-          (file-position *output-file* *salt-length*)
-          (write-sequence mac *output-file*))
+          (join-thread (aref threads i)))
 
         (file-length *output-file*)))))
 
-(defun decrypt-file (input-filename output-filename passphrase &optional (with-mac t))
+(defun decrypt-file (input-filename output-filename passphrase)
   "Read data from INPUT-FILENAME, decrypt it using PASSPHRASE and write the
 plaintext to OUTPUT-FILENAME. If WITH-MAC is NIL, the authenticity of the
 decrypted data will not be checked."
-  (let (nthreads mac nblocks)
-    (with-open-file (input-file input-filename
-                                :element-type '(unsigned-byte 8))
-      (with-open-file (output-file output-filename
-                                   :element-type'(unsigned-byte 8)
-                                   :direction :output
-                                   :if-exists :supersede)
+  (with-open-file (input-file input-filename
+                              :element-type '(unsigned-byte 8))
+    (with-open-file (output-file output-filename
+                                 :element-type'(unsigned-byte 8)
+                                 :direction :output
+                                 :if-exists :supersede)
+      (let (salt threads nthreads mac old-mac nblocks)
+
         (setf *input-file* input-file
               *input-file-lock* (make-lock)
               *output-file* output-file
               *output-file-lock* (make-lock))
 
-        ;; Read header (salt, tweak, iv, mac)
-        (read-header *input-file*)
+        ;; Read header
+        (setf salt (make-array *salt-length* :element-type '(unsigned-byte 8))
+              *tweak* (make-array *tweak-length* :element-type '(unsigned-byte 8))
+              *iv* (make-array *block-length* :element-type '(unsigned-byte 8))
+              old-mac (make-array *mac-length* :element-type '(unsigned-byte 8)))
+        (unless (= (read-sequence salt input-file) *salt-length*)
+          (error "Could not read the salt from the input stream."))
+        (unless (= (read-sequence *tweak* input-file) *tweak-length*)
+          (error "Could not read the tweak from the input stream."))
+        (unless (= (read-sequence *iv* input-file) *block-length*)
+          (error "Could not read the initialization vector from the input stream."))
+        (unless (= (read-sequence old-mac input-file) *mac-length*)
+          (error "Could not read the mac from the input stream."))
 
         ;; Generate key
-        (setf *key* (passphrase-to-key passphrase *salt*))
+        (setf *key* (passphrase-to-key passphrase salt))
 
-        ;; Compute and check message authentication code
-        (when with-mac
-          (file-position *input-file* (+ *salt-length* *mac-length*))
-          (setf mac (compute-mac *input-file* *key*))
-          (unless (equalp mac *mac*)
-            (error "Decryption failed.")))
+        ;; Check header mac
+        (setf mac (make-skein-mac *key*
+                                  :block-length *block-length*
+                                  :digest-length *mac-length*))
+        (update-skein-mac mac *tweak*)
+        (update-skein-mac mac *iv*)
+        (unless (equalp old-mac (skein-mac-digest mac))
+          (error "Decryption failed."))
 
         ;; Create threads
         (setf nthreads (max-number-of-threads))
         (setf nblocks (max 1 (ceiling (- (file-length *input-file*) *header-length*)
-                                      *block-length*)))
+                                      (+ *block-size* *mac-length*))))
         (when (< nblocks nthreads)
           (setf nthreads nblocks))
-        (setf *threads* (make-array nthreads))
+        (setf threads (make-array nthreads))
         (setf *boundaries* (make-array nthreads))
         (multiple-value-bind (q r)
             (floor nblocks nthreads)
@@ -361,13 +399,13 @@ decrypted data will not be checked."
                                                 (if (= i (1- nthreads))
                                                     (+ q r)
                                                     q)))
-              (setf (aref *threads* i)
+              (setf (aref threads i)
                     (make-thread #'decryption-thread :name name)))))
 
         ;; Wait for threads to finish
         (dotimes (i nthreads)
-          (join-thread (aref *threads* i)))
-        
+          (join-thread (aref threads i)))
+
         (file-length *output-file*)))))
 
 (defmacro with-raw-io ((&key (vmin 1) (vtime 0)) &body body)
@@ -401,6 +439,7 @@ decrypted data will not be checked."
   "Entry point for standalone program."
   (handler-case
       (let (decrypt-p input-filename output-filename passphrase)
+
         ;; Check arguments
         (cond ((and (= (length argv) 4) (string= (elt argv 1) "-d"))
                (setf decrypt-p t
