@@ -22,6 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :version "0.5"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
-  :depends-on (babel bordeaux-threads ironclad)
+  :depends-on (babel ironclad)
   :components ((:module "src"
                         :components ((:file "clcrypt-no-threads")))))
