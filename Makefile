@@ -1,6 +1,8 @@
-DESTDIR = /usr/local
+#DESTDIR = /usr/local
 
-clcrypt-threads: clcrypt.asd src/clcrypt.lisp
+all: clcrypt clcrypt-no-threads
+
+clcrypt: clcrypt.asd src/clcrypt.lisp
 	buildapp \
 		--output "clcrypt" \
 		--entry "clcrypt:main" \
@@ -12,7 +14,7 @@ clcrypt-threads: clcrypt.asd src/clcrypt.lisp
 
 clcrypt-no-threads: clcrypt-no-threads.asd src/clcrypt-no-threads.lisp
 	buildapp \
-		--output "clcrypt" \
+		--output "clcrypt-no-threads" \
 		--entry "clcrypt:main" \
 		--load-system "clcrypt-no-threads" \
 		--asdf-path "./" \
@@ -20,10 +22,8 @@ clcrypt-no-threads: clcrypt-no-threads.asd src/clcrypt-no-threads.lisp
 		--asdf-tree "${HOME}/quicklisp/" \
 		--compress-core
 
-all: clcrypt-threads
-
-install: clcrypt
-	install -m 755 clcrypt ${DESTDIR}/bin/clcrypt
+#install: clcrypt
+#	install -m 755 clcrypt ${DESTDIR}/bin/clcrypt
 
 clean:
 	rm -f clcrypt

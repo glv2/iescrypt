@@ -258,7 +258,7 @@ plaintext to OUTPUT-FILENAME."
 (defun main (argv)
   "Entry point for standalone program."
   (handler-case
-      (let (decrypt-p input-filename output-filename passphrase)
+      (let (decrypt-p input-filename output-filename passphrase passphrase-check)
 
         ;; Check arguments
         (cond ((and (= (length argv) 4) (string= (elt argv 1) "-d"))
@@ -270,11 +270,9 @@ plaintext to OUTPUT-FILENAME."
                      input-filename (elt argv 1)
                      output-filename (elt argv 2)))
               (t
-               (progn
-                 (format *error-output*
-                         "Usage: ~a [-d] <input file> <output file>~%"
-                         (elt argv 0))
-                 (return-from main -1))))
+               (error (format nil
+                              "Usage: ~a [-d] <input file> <output file>"
+                              (elt argv 0)))))
 
         ;; Get passphrase
         (format *standard-output* "Enter the passphrase: ")
@@ -282,6 +280,14 @@ plaintext to OUTPUT-FILENAME."
         (setf passphrase (with-raw-io ()
                            (read-line *standard-input*)))
         (format *standard-output* "~%")
+        (unless decrypt-p
+          (format *standard-output* "Enter the passphrase again: ")
+          (force-output *standard-output*)
+          (setf passphrase-check (with-raw-io ()
+                                   (read-line *standard-input*)))
+          (format *standard-output* "~%")
+          (unless (equal passphrase passphrase-check)
+            (error "Passphrases don't match.")))
 
         ;; Encrypt or decrypt
         (if decrypt-p
