@@ -26,4 +26,4 @@ clcrypt-no-threads: clcrypt-no-threads.asd src/clcrypt-no-threads.lisp
 #	install -m 755 clcrypt ${DESTDIR}/bin/clcrypt
 
 clean:
-	rm -f clcrypt
+	rm -f clcrypt clcrypt-no-threads

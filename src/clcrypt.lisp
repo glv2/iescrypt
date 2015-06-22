@@ -18,15 +18,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 This program encrypts and decrypts files.
 
-Cipher: threefish512 (counter mode)
-Key derivation: pbkdf2 (1000 iterations of skein512)
-Message authentication code: skein-mac (512/512)
+Key for cipher (threefish512) and message authentication codes (skein-mac512)
+is derived from salt and passphrase (pbkdf2, 1000 iterations of skein512).
+First mac is computed on cipher tweak and initialization-vector.
+Cleartext is encrypted by cipher in counter mode.
+A mac is computed on the ciphertext for each 1 MiB block of ciphertext.
 
 Encrypted file format:
+-----------------------------------------------------------------------------
 | salt (16 B) | tweak (16 B) | iv (64 B) | mac (64 B) | block | ... | block |
+-----------------------------------------------------------------------------
 
 Format of a block:
+----------------------------------
 | cipertext (1 MiB) | mac (64 B) |
+----------------------------------
 
 |#
 
