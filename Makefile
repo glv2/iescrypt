@@ -1,8 +1,8 @@
 #DESTDIR = /usr/local
 
-all: clcrypt clcrypt-no-threads
+all: clcrypt clcrypt-nt
 
-clcrypt: clcrypt.asd src/clcrypt.lisp
+clcrypt: clcrypt.asd src/package.lisp src/common.lisp src/clcrypt.lisp
 	buildapp \
 		--output "clcrypt" \
 		--entry "clcrypt:main" \
@@ -12,11 +12,11 @@ clcrypt: clcrypt.asd src/clcrypt.lisp
 		--asdf-tree "${HOME}/quicklisp/" \
 		--compress-core
 
-clcrypt-no-threads: clcrypt-no-threads.asd src/clcrypt-no-threads.lisp
+clcrypt-nt: clcrypt-nt.asd src/package-nt.lisp src/common.lisp src/clcrypt-nt.lisp
 	buildapp \
-		--output "clcrypt-no-threads" \
+		--output "clcrypt-nt" \
 		--entry "clcrypt:main" \
-		--load-system "clcrypt-no-threads" \
+		--load-system "clcrypt-nt" \
 		--asdf-path "./" \
 		--asdf-path "../ironclad/" \
 		--asdf-tree "${HOME}/quicklisp/" \

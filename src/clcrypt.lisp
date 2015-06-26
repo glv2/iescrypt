@@ -1,3 +1,5 @@
+;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
+
 #|
 
 Copyright 2015 Guillaume LE VAILLANT
@@ -15,69 +17,11 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-This program encrypts and decrypts files.
-
-Key for cipher (threefish512) and message authentication codes (skein-mac512)
-is derived from salt and passphrase (pbkdf2, 1000 iterations of skein512).
-First mac is computed on cipher tweak and initialization-vector.
-Cleartext is encrypted by cipher in counter mode.
-A mac is computed on the ciphertext for each 1 MiB block of ciphertext.
-
-Encrypted file format:
------------------------------------------------------------------------------
-| salt (16 B) | tweak (16 B) | iv (64 B) | mac (64 B) | block | ... | block |
------------------------------------------------------------------------------
-
-Format of a block:
-----------------------------------
-| cipertext (1 MiB) | mac (64 B) |
-----------------------------------
-
 |#
 
 
-(defpackage clcrypt
-  (:use cl)
-  (:import-from ironclad
-                block-length
-                digest-length
-                pbkdf2-hash-password
-                make-prng
-                random-data
-                make-cipher
-                encrypt-in-place
-                decrypt-in-place
-                make-skein-mac
-                update-skein-mac
-                skein-mac-digest)
-  (:import-from babel
-                string-to-octets)
-  (:import-from bordeaux-threads
-                make-lock
-                acquire-lock
-                release-lock
-                current-thread
-                thread-name
-                make-thread
-                join-thread)
-  (:export encrypt-file
-           decrypt-file
-           main))
-
 (in-package clcrypt)
 
-
-(defparameter *cipher* :threefish512)
-(defparameter *digest* :skein512)
-(defparameter *block-length* (block-length *cipher*))
-(defparameter *tweak-length* 16)
-(defparameter *salt-length* 16)
-(defparameter *iterations* 1000)
-(defparameter *mac-length* (digest-length *digest*))
-(defparameter *header-length* (+ *salt-length* *tweak-length* *block-length* *mac-length*))
-(defparameter *block-size* (* *block-length* 16384)) ; 1048576 bytes
-(defparameter *buffer-size* (/ *block-size* 32)) ; 32768 bytes
 
 (defparameter *key* nil)
 (defparameter *tweak* nil)
@@ -100,15 +44,6 @@ Format of a block:
 
   #-linux
   1)
-
-(defun passphrase-to-key (passphrase salt)
-  "Generate a key from a PASSPHRASE and a SALT."
-  (let ((passdata (string-to-octets passphrase :encoding :utf-8)))
-
-    (pbkdf2-hash-password passdata
-                          :digest *digest*
-                          :salt salt
-                          :iterations *iterations*)))
 
 (defun increment-counter-block (block n)
   (let ((length (length block))
@@ -287,8 +222,7 @@ Format of a block:
 
 (defun encrypt-file (input-filename output-filename passphrase)
   "Read data from INPUT-FILENAME, encrypt it using PASSPHRASE and write the
-ciphertext to OUTPUT-FILENAME. If WITH-MAC is NIL, the authenticity code will
-not be computed, and will contain random data instead."
+ciphertext to OUTPUT-FILENAME."
   (with-open-file (input-file input-filename
                               :element-type '(unsigned-byte 8))
     (with-open-file (output-file output-filename
@@ -348,8 +282,7 @@ not be computed, and will contain random data instead."
 
 (defun decrypt-file (input-filename output-filename passphrase)
   "Read data from INPUT-FILENAME, decrypt it using PASSPHRASE and write the
-plaintext to OUTPUT-FILENAME. If WITH-MAC is NIL, the authenticity of the
-decrypted data will not be checked."
+plaintext to OUTPUT-FILENAME."
   (with-open-file (input-file input-filename
                               :element-type '(unsigned-byte 8))
     (with-open-file (output-file output-filename
@@ -413,73 +346,3 @@ decrypted data will not be checked."
           (join-thread (aref threads i)))
 
         (file-length *output-file*)))))
-
-(defmacro with-raw-io ((&key (vmin 1) (vtime 0)) &body body)
-  "Execute BODY without echoing input IO actions."
-  (declare (ignorable vmin vtime))
-
-  #+sbcl
-  (let ((old (gensym))
-        (new (gensym))
-        (bits (gensym)))
-    `(let ((,old (sb-posix:tcgetattr 0))
-           (,new (sb-posix:tcgetattr 0))
-           (,bits (logior sb-posix:icanon sb-posix:echo sb-posix:echoe
-                          sb-posix:echok sb-posix:echonl)))
-       (unwind-protect
-            (progn
-              (setf (sb-posix:termios-lflag ,new)
-                    (logandc2 (sb-posix:termios-lflag ,old) ,bits)
-                    (aref (sb-posix:termios-cc ,new) sb-posix:vmin) ,vmin
-                    (aref (sb-posix:termios-cc ,new) sb-posix:vtime) ,vtime)
-              (sb-posix:tcsetattr 0 sb-posix:tcsadrain ,new)
-              ,@body)
-         (sb-posix:tcsetattr 0 sb-posix:tcsadrain ,old))))
-
-  #-sbcl
-  `(progn
-     (format *error-output* "Warning: could not disable the terminal echo.~%")
-     ,@body))
-
-(defun main (argv)
-  "Entry point for standalone program."
-  (handler-case
-      (let (decrypt-p input-filename output-filename passphrase passphrase-check)
-
-        ;; Check arguments
-        (cond ((and (= (length argv) 4) (string= (elt argv 1) "-d"))
-               (setf decrypt-p t
-                     input-filename (elt argv 2)
-                     output-filename (elt argv 3)))
-              ((= (length argv) 3)
-               (setf decrypt-p nil
-                     input-filename (elt argv 1)
-                     output-filename (elt argv 2)))
-              (t
-               (error (format nil
-                              "Usage: ~a [-d] <input file> <output file>"
-                              (elt argv 0)))))
-
-        ;; Get passphrase
-        (format *standard-output* "Enter the passphrase: ")
-        (force-output *standard-output*)
-        (setf passphrase (with-raw-io ()
-                           (read-line *standard-input*)))
-        (format *standard-output* "~%")
-        (unless decrypt-p
-          (format *standard-output* "Enter the passphrase again: ")
-          (force-output *standard-output*)
-          (setf passphrase-check (with-raw-io ()
-                                   (read-line *standard-input*)))
-          (format *standard-output* "~%")
-          (unless (equal passphrase passphrase-check)
-            (error "Passphrases don't match.")))
-
-        ;; Encrypt or decrypt
-        (if decrypt-p
-            (decrypt-file input-filename output-filename passphrase)
-            (encrypt-file input-filename output-filename passphrase)))
-    (t (err) (progn
-               (format *error-output* "~%Error: ~a~%" err)
-               (return-from main -1))))
-  0)

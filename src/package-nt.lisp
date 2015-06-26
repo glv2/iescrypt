@@ -1,4 +1,7 @@
+;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
+
 #|
+
 Copyright 2015 Guillaume LE VAILLANT
 
 This program is free software: you can redistribute it and/or modify
@@ -13,15 +16,26 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 |#
 
 
-(defsystem clcrypt-no-threads
-  :name clcrypt
-  :description "Tool to encrypt and decrypt files"
-  :version "0.5"
-  :author "Guillaume LE VAILLANT"
-  :license "GPL-3"
-  :depends-on (babel ironclad)
-  :components ((:module "src"
-                        :components ((:file "clcrypt-no-threads")))))
+(defpackage clcrypt
+  (:use cl)
+  (:import-from ironclad
+                block-length
+                digest-length
+                pbkdf2-hash-password
+                make-prng
+                random-data
+                make-cipher
+                encrypt-in-place
+                decrypt-in-place
+                make-skein-mac
+                update-skein-mac
+                skein-mac-digest)
+  (:import-from babel
+                string-to-octets)
+  (:export encrypt-file
+           decrypt-file
+           main))
