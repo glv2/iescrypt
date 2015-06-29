@@ -209,6 +209,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                      (qt::%make-qapplication (cons name args))
                      instance))))))
 
-(defun gui ()
+(defun gui (&rest args)
+  (declare (ignore args))
   (mk-qapplication "clcrypt")
   (with-main-window (window (make-instance 'main-window))))

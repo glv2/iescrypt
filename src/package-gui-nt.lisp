@@ -36,6 +36,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 skein-mac-digest)
   (:import-from babel
                 string-to-octets)
-  (:export encrypt-file
-           decrypt-file
-           main))
+  (:export gui))
