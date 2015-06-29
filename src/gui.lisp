@@ -116,9 +116,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (#_exec passphrase-dialog)
     (setf passphrase (passphrase instance))
     (when passphrase
+      (#_setWindowTitle instance "clcrypt - encrypting...")
+      (#_repaint instance)
       (handler-case
           (encrypt-file input-file output-file passphrase)
         (t (err) (setf error (format nil "~a" err))))
+      (#_setWindowTitle instance "clcrypt")
+      (#_repaint instance)
       (let ((msgbox (#_new QMessageBox instance)))
         (if error
             (progn
@@ -144,9 +148,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (#_exec passphrase-dialog)
     (setf passphrase (passphrase instance))
     (when passphrase
+      (#_setWindowTitle instance "clcrypt - decrypting...")
+      (#_repaint instance)
       (handler-case
           (decrypt-file input-file output-file passphrase)
         (t (err) (setf error (format nil "~a" err))))
+      (#_setWindowTitle instance "clcrypt")
+      (#_repaint instance)
       (let ((msgbox (#_new QMessageBox instance)))
         (if error
             (progn
