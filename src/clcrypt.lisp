@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (in-package clcrypt)
 
 
+(defparameter *max-number-of-threads* nil)
 (defparameter *key* nil)
 (defparameter *tweak* nil)
 (defparameter *iv* nil)
@@ -34,16 +35,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 (defun max-number-of-threads ()
-  #+linux
-  (with-open-file (cpuinfo #p"/proc/cpuinfo")
-    (do ((n 0)
-         (line (read-line cpuinfo nil nil) (read-line cpuinfo nil nil)))
-        ((null line) n)
-      (when (string= (subseq line 0 (min (length line) 9)) "processor")
-        (incf n))))
+  (let ((cores 1))
+    (handler-case
+        (progn
+          #+linux
+          (with-open-file (cpuinfo #p"/proc/cpuinfo")
+            (do ((n 0)
+                 (line (read-line cpuinfo nil nil) (read-line cpuinfo nil nil)))
+                ((null line) (setf cores n))
+              (when (string= (subseq line 0 (min (length line) 9)) "processor")
+                (incf n))))
 
-  #-linux
-  1)
+          #+windows
+          (let ((buffer (run/s "wmic cpu get NumberOfCores /format:List")))
+            (with-input-from-string (in buffer)
+              (do ((n 0)
+                   (line (read-line in nil nil) (read-line in nil nil)))
+                  ((null line) (setf cores n))
+                (when (string= (subseq line 0 (min (length line) 14)) "NumberOfCores=")
+                  (incf n (parse-integer (subseq line 14)))))))
+
+          #+(or darwin freebsd netbsd openbsd)
+          (let ((buffer (run/s "sysctl hw.logicalcpu")))
+            (with-input-from-string (in buffer)
+              (do ((n 0)
+                   (line (read-line in nil nil) (read-line in nil nil)))
+                  ((null line) (setf cores n))
+                (when (string= (subseq line 0 (min (length line) 15)) "hw.logicalcpu: ")
+                  (incf n (parse-integer (subseq line 15))))))))
+      (t () (progn
+              (setf cores 1)
+              (format *error-output* "Warning: could not determine the number of processing cores.~%"))))
+
+    (setf cores (max 1 cores))
+    (format *error-output* "Info: using ~d thread~:p.~%" cores)
+    cores))
 
 (defun increment-counter-block (block n)
   (let ((length (length block))
@@ -257,7 +283,9 @@ ciphertext to OUTPUT-FILENAME."
         (write-sequence (skein-mac-digest mac) output-file)
 
         ;; Create threads
-        (setf nthreads (max-number-of-threads))
+        (unless *max-number-of-threads*
+          (setf *max-number-of-threads* (max-number-of-threads)))
+        (setf nthreads *max-number-of-threads*)
         (setf nblocks (max 1 (ceiling (file-length *input-file*) *block-size*)))
         (when (< nblocks nthreads)
           (setf nthreads nblocks))
@@ -323,7 +351,9 @@ plaintext to OUTPUT-FILENAME."
           (error "Decryption failed."))
 
         ;; Create threads
-        (setf nthreads (max-number-of-threads))
+        (unless *max-number-of-threads*
+          (setf *max-number-of-threads* (max-number-of-threads)))
+        (setf nthreads *max-number-of-threads*)
         (setf nblocks (max 1 (ceiling (- (file-length *input-file*) *header-length*)
                                       (+ *block-size* *mac-length*))))
         (when (< nblocks nthreads)

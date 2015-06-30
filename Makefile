@@ -32,7 +32,7 @@ clcrypt-nt: clcrypt-nt.asd src/package-nt.lisp src/common.lisp src/clcrypt-nt.li
 		--asdf-tree "${HOME}/quicklisp/" \
 		--compress-core
 
-clcrypt-gui-nt: clcrypt-gui-nt.asd src/package-gui-nt.lisp src/common.lisp src/clcrypt.lisp src/gui.lisp
+clcrypt-gui-nt: clcrypt-gui-nt.asd src/package-gui-nt.lisp src/common.lisp src/clcrypt-nt.lisp src/gui.lisp
 	buildapp \
 		--output "clcrypt-gui-nt" \
 		--entry "clcrypt:gui" \

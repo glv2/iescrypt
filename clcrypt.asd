@@ -23,10 +23,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defsystem clcrypt
   :name clcrypt
   :description "Tool to encrypt and decrypt files"
-  :version "0.5"
+  :version "1.0"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
-  :depends-on (babel bordeaux-threads ironclad)
+  :depends-on (babel
+               bordeaux-threads
+               #-linux inferior-shell
+               ironclad
+               trivial-features)
   :components ((:module "src"
                         :components ((:file "clcrypt" :depends-on ("common" "package"))
                                      (:file "common" :depends-on ("package"))

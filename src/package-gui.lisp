@@ -44,4 +44,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 thread-name
                 make-thread
                 join-thread)
+  #-linux (:import-from inferior-shell
+                        run/s)
   (:export gui))

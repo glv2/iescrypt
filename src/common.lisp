@@ -25,11 +25,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defparameter *cipher* :threefish512)
 (defparameter *digest* :skein512)
-(defparameter *block-length* (block-length *cipher*))
+(defparameter *block-length* (block-length *cipher*)) ; 64 bytes
 (defparameter *tweak-length* 16)
 (defparameter *salt-length* 16)
 (defparameter *iterations* 1000)
-(defparameter *mac-length* (digest-length *digest*))
+(defparameter *mac-length* (digest-length *digest*)) ; 64 bytes
 (defparameter *header-length* (+ *salt-length* *tweak-length* *block-length* *mac-length*))
 (defparameter *block-size* (* *block-length* 16384)) ; 1048576 bytes
 (defparameter *buffer-size* (/ *block-size* 32)) ; 32768 bytes
