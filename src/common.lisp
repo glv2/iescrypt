@@ -48,7 +48,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   "Execute BODY without echoing input IO actions."
   (declare (ignorable vmin vtime))
 
-  #+sbcl
+  #+(and sbcl unix)
   (let ((old (gensym))
         (new (gensym))
         (bits (gensym)))
@@ -66,7 +66,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               ,@body)
          (sb-posix:tcsetattr 0 sb-posix:tcsadrain ,old))))
 
-  #-sbcl
+  #-(and sbcl unix)
   `(progn
      (format *error-output* "Warning: could not disable the terminal echo.~%")
      ,@body))
