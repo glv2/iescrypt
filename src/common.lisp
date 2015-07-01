@@ -31,8 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defparameter *iterations* 1000)
 (defparameter *mac-length* (digest-length *digest*)) ; 64 bytes
 (defparameter *header-length* (+ *salt-length* *tweak-length* *block-length* *mac-length*))
-(defparameter *block-size* (* *block-length* 16384)) ; 1048576 bytes
-(defparameter *buffer-size* (/ *block-size* 32)) ; 32768 bytes
+(defparameter *block-size* 1048576) ; 1 MiB, 16384 cipher blocks of 64 bytes
+(defparameter *buffer-size* 32768) ; 32 KiB, 512 cipher blocks of 64 bytes
 
 
 (defun passphrase-to-key (passphrase salt)

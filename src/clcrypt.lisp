@@ -161,9 +161,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             (incf offset-out *mac-length*)
             (reinitialize-instance mac :key *key*)
             (setf i 0))))
-    (t (err) (progn
-               (format *error-output* "~%Error: ~a~%" err)
-               (return-from encryption-thread)))))
+    (t (err) (return-from encryption-thread (format nil "~a" err)))))
 
 (defun decryption-thread ()
   (handler-case
@@ -242,9 +240,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               (progn
                 (replace buffer buffer :end1 *mac-length* :start2 text-length)
                 (setf text-length *mac-length*)))))
-    (t (err) (progn
-               (format *error-output* "~%Error: ~a~%" err)
-               (return-from decryption-thread)))))
+    (t (err) (return-from decryption-thread (format nil "~a" err)))))
 
 (defun encrypt-file (input-filename output-filename passphrase)
   "Read data from INPUT-FILENAME, encrypt it using PASSPHRASE and write the
@@ -256,7 +252,7 @@ ciphertext to OUTPUT-FILENAME."
                                  :direction :output
                                  :if-exists :supersede)
       (let ((prng (make-prng :fortuna :seed :random))
-            salt threads nthreads mac nblocks)
+            salt threads nthreads mac nblocks ret err)
 
         (setf *input-file* input-file
               *input-file-lock* (make-lock)
@@ -304,7 +300,11 @@ ciphertext to OUTPUT-FILENAME."
 
         ;; Wait for threads to finish
         (dotimes (i nthreads)
-          (join-thread (aref threads i)))
+          (setf ret (join-thread (aref threads i)))
+          (when (and (null err) (stringp ret))
+            (setf err ret)))
+        (when err
+          (error err))
 
         (file-length *output-file*)))))
 
@@ -317,7 +317,7 @@ plaintext to OUTPUT-FILENAME."
                                  :element-type'(unsigned-byte 8)
                                  :direction :output
                                  :if-exists :supersede)
-      (let (salt threads nthreads mac old-mac nblocks)
+      (let (salt threads nthreads mac old-mac nblocks ret err)
 
         (setf *input-file* input-file
               *input-file-lock* (make-lock)
@@ -373,6 +373,10 @@ plaintext to OUTPUT-FILENAME."
 
         ;; Wait for threads to finish
         (dotimes (i nthreads)
-          (join-thread (aref threads i)))
+          (setf ret (join-thread (aref threads i)))
+          (when (and (null err) (stringp ret))
+            (setf err ret)))
+        (when err
+          (error err))
 
         (file-length *output-file*)))))
