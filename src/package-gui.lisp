@@ -22,6 +22,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defpackage clcrypt
   (:use cl qt)
+  (:import-from babel
+                string-to-octets)
+  #-linux (:import-from inferior-shell
+                        run/s)
   (:import-from ironclad
                 block-length
                 digest-length
@@ -34,16 +38,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 make-skein-mac
                 update-skein-mac
                 skein-mac-digest)
-  (:import-from babel
-                string-to-octets)
-  (:import-from bordeaux-threads
-                make-lock
-                acquire-lock
-                release-lock
-                current-thread
-                thread-name
-                make-thread
-                join-thread)
-  #-linux (:import-from inferior-shell
-                        run/s)
+  (:import-from lparallel
+                *kernel*
+                kernel-worker-count
+                make-channel
+                make-kernel
+                receive-result
+                submit-task
+                try-receive-result)
   (:export gui))

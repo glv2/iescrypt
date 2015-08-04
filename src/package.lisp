@@ -22,30 +22,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defpackage clcrypt
   (:use cl)
-  (:import-from ironclad
-                block-length
-                digest-length
-                pbkdf2-hash-password
-                make-prng
-                random-data
-                make-cipher
-                encrypt-in-place
-                decrypt-in-place
-                make-skein-mac
-                update-skein-mac
-                skein-mac-digest)
   (:import-from babel
                 string-to-octets)
-  (:import-from bordeaux-threads
-                make-lock
-                acquire-lock
-                release-lock
-                current-thread
-                thread-name
-                make-thread
-                join-thread)
   #-linux (:import-from inferior-shell
                         run/s)
+  (:import-from ironclad
+                block-length
+                decrypt
+                digest-length
+                encrypt
+                make-cipher
+                make-prng
+                make-skein-mac
+                pbkdf2-hash-password
+                random-data
+                skein-mac-digest
+                update-skein-mac)
+  (:import-from lparallel
+                *kernel*
+                kernel-worker-count
+                make-channel
+                make-kernel
+                receive-result
+                submit-task
+                try-receive-result)
   (:export encrypt-file
            decrypt-file
            main))

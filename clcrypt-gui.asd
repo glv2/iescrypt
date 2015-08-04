@@ -27,9 +27,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
   :depends-on (babel
-               bordeaux-threads
                #-linux inferior-shell
                ironclad
+               lparallel
                trivial-features
                qt)
   :components ((:module "src"
