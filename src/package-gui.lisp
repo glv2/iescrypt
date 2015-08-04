@@ -28,16 +28,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                         run/s)
   (:import-from ironclad
                 block-length
-                digest-length
-                pbkdf2-hash-password
-                make-prng
-                random-data
-                make-cipher
-                encrypt-in-place
                 decrypt-in-place
+                digest-length
+                encrypt-in-place
+                make-cipher
+                make-prng
                 make-skein-mac
-                update-skein-mac
-                skein-mac-digest)
+                pbkdf2-hash-password
+                random-data
+                skein-mac-digest
+                update-skein-mac)
   (:import-from lparallel
                 *kernel*
                 kernel-worker-count

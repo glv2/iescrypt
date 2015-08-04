@@ -28,9 +28,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                         run/s)
   (:import-from ironclad
                 block-length
-                decrypt
+                decrypt-in-place
                 digest-length
-                encrypt
+                encrypt-in-place
                 make-cipher
                 make-prng
                 make-skein-mac

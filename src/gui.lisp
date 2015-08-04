@@ -92,8 +92,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (:slots ("browse-input()" browse-input)
           ("browse-output()" browse-output)
           ("set-passphrase(QString)" set-passphrase)
-          ("encrypt()" encrypt)
-          ("decrypt()" decrypt)))
+          ("encrypt()" encryption)
+          ("decrypt()" decryption)))
 
 (defmethod browse-input ((instance main-window))
   (#_setText (input-file instance) (#_QFileDialog::getOpenFileName)))
@@ -104,7 +104,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defmethod set-passphrase ((instance main-window) passphrase)
   (setf (passphrase instance) passphrase))
 
-(defmethod encrypt ((instance main-window))
+(defmethod encryption ((instance main-window))
   (let ((input-file (#_text (input-file instance)))
         (output-file (#_text (output-file instance)))
         (passphrase-dialog (make-instance 'passphrase-dialog :check t :parent instance))
@@ -136,7 +136,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               (#_setStandardButtons msgbox (#_QMessageBox::Ok))))
         (#_exec msgbox)))))
 
-(defmethod decrypt ((instance main-window))
+(defmethod decryption ((instance main-window))
   (let ((input-file (#_text (input-file instance)))
         (output-file (#_text (output-file instance)))
         (passphrase-dialog (make-instance 'passphrase-dialog :parent instance))

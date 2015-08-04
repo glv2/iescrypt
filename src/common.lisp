@@ -23,16 +23,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (in-package clcrypt)
 
 
-(defparameter *cipher* :threefish512)
-(defparameter *digest* :skein512)
-(defparameter *block-length* (block-length *cipher*)) ; 64 bytes
-(defparameter *tweak-length* 16)
-(defparameter *salt-length* 16)
-(defparameter *iterations* 1000)
-(defparameter *mac-length* (digest-length *digest*)) ; 64 bytes
-(defparameter *header-length* (+ *salt-length* *tweak-length* *block-length* *mac-length*))
-(defparameter *block-size* 1048576) ; 1 MiB, 16384 cipher blocks of 64 bytes
-(defparameter *buffer-size* 32768) ; 32 KiB, 512 cipher blocks of 64 bytes
+(defparameter +cipher+ :threefish512)
+(defparameter +digest+ :skein512)
+(defparameter +cipher-block-length+ (block-length +cipher+)) ; 64 bytes
+(defparameter +tweak-length+ 16)
+(defparameter +salt-length+ 16)
+(defparameter +iterations+ 1000)
+(defparameter +mac-length+ (digest-length +digest+)) ; 64 bytes
+(defparameter +block-size+ 1048576) ; 1 MiB, 16384 cipher blocks of 64 bytes
 
 
 (defun passphrase-to-key (passphrase salt)
@@ -40,9 +38,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (let ((passdata (string-to-octets passphrase :encoding :utf-8)))
 
     (pbkdf2-hash-password passdata
-                          :digest *digest*
+                          :digest +digest+
                           :salt salt
-                          :iterations *iterations*)))
+                          :iterations +iterations+)))
 
 (defmacro with-raw-io ((&key (vmin 1) (vtime 0)) &body body)
   "Execute BODY without echoing input IO actions."

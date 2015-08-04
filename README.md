@@ -37,7 +37,7 @@ with ccl, ecl and clisp, but 200 times slower).
 
 If you want to use the multi-threaded version, you will also need:
 
-* [bordeaux-threads](http://www.cliki.net/Bordeaux-Threads)
+* [lparallel](http://lparallel.org/)
 * [trivial-features](http://www.cliki.net/trivial-features)
 
 If you want to use the multi-threaded version on an operating system other than
@@ -49,7 +49,8 @@ If you want to use the Qt GUI, you will also need:
 
 * [CommonQt](http://common-lisp.net/project/commonqt)
 
-If you want to build clcrypt as an executable file, you will also need:
+If you want to build clcrypt as an executable using the Makefile, you will
+also need:
 
 * [buildapp](http://www.cliki.net/Buildapp)
 

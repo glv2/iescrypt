@@ -64,44 +64,42 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (let ((length (length block))
         (carry n))
     (loop for i from (1- length) downto 0
-          until (zerop carry) do
-          (let ((sum (+ (aref block i) carry)))
-            (setf (aref block i) (ldb (byte 8 0) sum)
-                  carry (ash sum -8))))
+       until (zerop carry) do
+         (let ((sum (+ (aref block i) carry)))
+           (setf (aref block i) (ldb (byte 8 0) sum)
+                 carry (ash sum -8))))
     (values)))
 
-(defun encrypt+mac (job-id tweak key counter plaintext len)
-  (let* ((cipher (make-cipher *cipher*
+(defun encrypt+mac (job-id tweak key counter buffer len)
+  (let* ((cipher (make-cipher +cipher+
                               :key key
                               :tweak tweak
                               :mode :ctr
                               :initialization-vector counter))
          (mac (make-skein-mac key
-                              :block-length *block-length*
-                              :digest-length *mac-length*))
-         (ciphertext (make-array (+ len *mac-length*) :element-type '(unsigned-byte 8))))
-    (encrypt cipher plaintext ciphertext :plaintext-end len)
-    (update-skein-mac mac ciphertext :end len)
-    (replace ciphertext (skein-mac-digest mac) :start1 len)
-    (list job-id ciphertext)))
+                              :block-length +cipher-block-length+
+                              :digest-length +mac-length+)))
+    (encrypt-in-place cipher buffer :end len)
+    (update-skein-mac mac buffer :end len)
+    (replace buffer (skein-mac-digest mac) :start1 len :end2 +mac-length+)
+    (list job-id nil buffer (+ len +mac-length+))))
 
-(defun decrypt+check (job-id tweak key counter ciphertext+mac len)
-  (let* ((cipher (make-cipher *cipher*
+(defun decrypt+check (job-id tweak key counter buffer len)
+  (let* ((cipher (make-cipher +cipher+
                               :key key
                               :tweak tweak
                               :mode :ctr
                               :initialization-vector counter))
          (mac (make-skein-mac key
-                              :block-length *block-length*
-                              :digest-length *mac-length*))
-         (ciphertext-len (- len *mac-length*))
-         (plaintext (make-array ciphertext-len :element-type '(unsigned-byte 8)))
-         (old-mac (subseq ciphertext+mac ciphertext-len len)))
-    (update-skein-mac mac ciphertext+mac :end ciphertext-len)
-    (decrypt cipher ciphertext+mac plaintext :ciphertext-end ciphertext-len)
+                              :block-length +cipher-block-length+
+                              :digest-length +mac-length+))
+         (ciphertext-len (- len +mac-length+))
+         (old-mac (subseq buffer ciphertext-len len)))
+    (update-skein-mac mac buffer :end ciphertext-len)
+    (decrypt-in-place cipher buffer :end ciphertext-len)
     (if (equalp old-mac (skein-mac-digest mac))
-        (list job-id plaintext nil)
-        (list job-id nil "Data corrupted."))))
+        (list job-id nil buffer ciphertext-len)
+        (list job-id "Data corrupted." nil 0))))
 
 (defun encrypt-file (input-filename output-filename passphrase)
   "Read data from INPUT-FILENAME, encrypt it using PASSPHRASE and write the
@@ -116,17 +114,17 @@ ciphertext to OUTPUT-FILENAME."
             salt key tweak iv mac)
 
         ;; Make header
-        (setf salt (random-data *salt-length* prng)
-              tweak (random-data *tweak-length* prng)
-              iv (random-data *block-length* prng))
+        (setf salt (random-data +salt-length+ prng)
+              tweak (random-data +tweak-length+ prng)
+              iv (random-data +cipher-block-length+ prng))
 
         ;; Generate key
         (setf key (passphrase-to-key passphrase salt))
 
         ;; Write header
         (setf mac (make-skein-mac key
-                                  :block-length *block-length*
-                                  :digest-length *mac-length*))
+                                  :block-length +cipher-block-length+
+                                  :digest-length +mac-length+))
         (update-skein-mac mac tweak)
         (update-skein-mac mac iv)
         (write-sequence salt output-file)
@@ -143,38 +141,46 @@ ciphertext to OUTPUT-FILENAME."
              (job-id 0)
              (next-job-id 0)
              (counter iv)
-             (counter-increment (/ *block-size* *block-length*))
+             (counter-increment (/ +block-size+ +cipher-block-length+))
              (end-of-file nil))
             ((and end-of-file (zerop running-tasks)))
 
           ;; Add new encryption tasks
-          (do (plaintext len)
+          (do (buffer len)
               ((or end-of-file (>= running-tasks (kernel-worker-count))))
 
             ;; Read plaintext block
-            (setf plaintext (make-array *block-size* :element-type '(unsigned-byte 8)))
-            (setf len (read-sequence plaintext input-file))
-            (when (< len *block-size*)
+            (setf buffer (make-array (+ +block-size+ +mac-length+)
+                                     :element-type '(unsigned-byte 8)))
+            (setf len (read-sequence buffer input-file :end +block-size+))
+            (when (< len +block-size+)
               (setf end-of-file t))
 
             ;; Submit task (only the first task can have no data to encrypt)
-            (unless (and (zerop len) (plusp job-id))
-              (submit-task channel #'encrypt+mac job-id tweak key (copy-seq counter) plaintext len)
+            (when (or (plusp len) (zerop job-id))
+              (submit-task channel #'encrypt+mac job-id tweak key (copy-seq counter) buffer len)
               (incf running-tasks)
               (increment-counter-block counter counter-increment)
               (incf job-id)))
 
-          ;; Get the results of the finished encryption tasks (job-id cyphertext+mac)
+          ;; Get the results of the finished encryption tasks
+          ;; A result is a list: (job-id error cyphertext+mac length)
           (unless (zerop running-tasks)
             (do ((res (receive-result channel) (try-receive-result channel)))
                 ((null res))
-              (setf (gethash (first res) results) (second res))
+              (when (second res)
+                (error (second res)))
+              (setf (gethash (first res) results) (cddr res))
               (decf running-tasks)))
 
           ;; Write ciphertext and mac blocks
-          (do ((data (gethash next-job-id results) (gethash next-job-id results)))
-              ((null data))
-            (write-sequence data output-file)
+          (do ((res (gethash next-job-id results) (gethash next-job-id results))
+               buffer
+               len)
+              ((null res))
+            (setf buffer (first res))
+            (setf len (second res))
+            (write-sequence buffer output-file :end len)
             (remhash next-job-id results)
             (incf next-job-id)))
 
@@ -192,17 +198,17 @@ plaintext to OUTPUT-FILENAME."
       (let (salt key tweak iv mac old-mac)
 
         ;; Read header
-        (setf salt (make-array *salt-length* :element-type '(unsigned-byte 8))
-              tweak (make-array *tweak-length* :element-type '(unsigned-byte 8))
-              iv (make-array *block-length* :element-type '(unsigned-byte 8))
-              old-mac (make-array *mac-length* :element-type '(unsigned-byte 8)))
-        (unless (= (read-sequence salt input-file) *salt-length*)
+        (setf salt (make-array +salt-length+ :element-type '(unsigned-byte 8))
+              tweak (make-array +tweak-length+ :element-type '(unsigned-byte 8))
+              iv (make-array +cipher-block-length+ :element-type '(unsigned-byte 8))
+              old-mac (make-array +mac-length+ :element-type '(unsigned-byte 8)))
+        (unless (= (read-sequence salt input-file) +salt-length+)
           (error "Could not read the salt from the input stream."))
-        (unless (= (read-sequence tweak input-file) *tweak-length*)
+        (unless (= (read-sequence tweak input-file) +tweak-length+)
           (error "Could not read the tweak from the input stream."))
-        (unless (= (read-sequence iv input-file) *block-length*)
+        (unless (= (read-sequence iv input-file) +cipher-block-length+)
           (error "Could not read the initialization vector from the input stream."))
-        (unless (= (read-sequence old-mac input-file) *mac-length*)
+        (unless (= (read-sequence old-mac input-file) +mac-length+)
           (error "Could not read the mac from the input stream."))
 
         ;; Generate key
@@ -210,8 +216,8 @@ plaintext to OUTPUT-FILENAME."
 
         ;; Check header mac
         (setf mac (make-skein-mac key
-                                  :block-length *block-length*
-                                  :digest-length *mac-length*))
+                                  :block-length +cipher-block-length+
+                                  :digest-length +mac-length+))
         (update-skein-mac mac tweak)
         (update-skein-mac mac iv)
         (unless (equalp old-mac (skein-mac-digest mac))
@@ -226,43 +232,48 @@ plaintext to OUTPUT-FILENAME."
              (job-id 0)
              (next-job-id 0)
              (counter iv)
-             (counter-increment (/ *block-size* *block-length*))
+             (counter-increment (/ +block-size+ +cipher-block-length+))
              (end-of-file nil))
             ((and end-of-file (zerop running-tasks)))
 
           ;; Add new decryption tasks
-          (do (ciphertext+mac len)
+          (do (buffer len)
               ((or end-of-file (>= running-tasks (kernel-worker-count))))
 
             ;; Read ciphertext and mac
-            (setf ciphertext+mac (make-array (+ *block-size* *mac-length*)
-                                             :element-type '(unsigned-byte 8)))
-            (setf len (read-sequence ciphertext+mac input-file))
-            (when (< len (+ *block-size* *mac-length*))
+            (setf buffer (make-array (+ +block-size+ +mac-length+)
+                                     :element-type '(unsigned-byte 8)))
+            (setf len (read-sequence buffer input-file))
+            (when (< len (+ +block-size+ +mac-length+))
               (setf end-of-file t))
 
             ;; Submit task
-            (unless (zerop len)
-              (when (< len *mac-length*)
+            (when (or (plusp len) (zerop job-id))
+              (when (< len +mac-length+)
                 (error "Could not read the mac from the input stream."))
-              (submit-task channel #'decrypt+check job-id tweak key (copy-seq counter) ciphertext+mac len)
+              (submit-task channel #'decrypt+check job-id tweak key (copy-seq counter) buffer len)
               (incf running-tasks)
               (increment-counter-block counter counter-increment)
               (incf job-id)))
 
-          ;; Get the resultes of the finished decryption tasks (job-id plaintext error)
+          ;; Get the results of the finished decryption tasks
+          ;; A result is a list: (job-id error plaintext length)
           (unless (zerop running-tasks)
             (do ((res (receive-result channel) (try-receive-result channel)))
                 ((null res))
-              (when (third res)
-                (error (third res)))
-              (setf (gethash (first res) results) (second res))
+              (when (second res)
+                (error (second res)))
+              (setf (gethash (first res) results) (cddr res))
               (decf running-tasks)))
 
           ;; Write plaintext blocks
-          (do ((plaintext (gethash next-job-id results) (gethash next-job-id results)))
-              ((null plaintext))
-            (write-sequence plaintext output-file)
+          (do ((res (gethash next-job-id results) (gethash next-job-id results))
+               buffer
+               len)
+              ((null res))
+            (setf buffer (first res))
+            (setf len (second res))
+            (write-sequence buffer output-file :end len)
             (remhash next-job-id results)
             (incf next-job-id)))
 
