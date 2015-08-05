@@ -60,15 +60,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (format *error-output* "Info: using ~d thread~:p.~%" cores)
     cores))
 
-(defun increment-counter-block (block n)
-  (let ((length (length block))
-        (carry n))
-    (loop for i from (1- length) downto 0
-       until (zerop carry) do
-         (let ((sum (+ (aref block i) carry)))
-           (setf (aref block i) (ldb (byte 8 0) sum)
-                 carry (ash sum -8))))
-    (values)))
+(defun increment-counter-block (counter-block n)
+  (do ((carry n)
+       (i (1- (length counter-block)) (1- i))
+       sum)
+      ((or (zerop carry) (minusp i)))
+    (setf sum (+ (aref counter-block i) carry))
+    (setf (aref counter-block i) (ldb (byte 8 0) sum))
+    (setf carry (ash sum -8)))
+  (values))
 
 (defun encrypt+mac (job-id tweak key counter buffer len)
   (let* ((cipher (make-cipher +cipher+
