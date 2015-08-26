@@ -14,7 +14,7 @@ There are several version of it:
 * The key for the cipher (threefish512) and the message authentication
 codes (skein-mac512) is derived from a salt and a passphrase (pbkdf2, 1000
 iterations of skein512).
-* The first mac is computed on the cipher tweak and the initialization-vector.
+* The first mac is computed on the cipher tweak and the initialization vector.
 * The cleartext is encrypted by the cipher in counter mode.
 * A mac is computed on the ciphertext for each 1 MiB block of ciphertext.
 * The last block of ciphertext can be smaller than 1 MiB (depending on the
