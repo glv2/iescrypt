@@ -2,7 +2,7 @@
 
 The clcrypt program encrypts and decrypts files.
 
-There are several version of it:
+There are several versions of it:
 
 * multi-threaded (default)
 * multi-threaded + GUI
@@ -26,7 +26,7 @@ Format of the encrypted file:
 
 Format of a block:
 
-    | cipertext (1 MiB) | mac (64 B) |
+    | ciphertext (1 MiB) | mac (64 B) |
 
 ## Dependencies
 
