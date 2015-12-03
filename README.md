@@ -2,12 +2,10 @@
 
 The clcrypt program encrypts and decrypts files.
 
-There are several versions of it:
+There are two versions of it:
 
-* multi-threaded (default)
-* multi-threaded + GUI
-* single-threaded
-* single-threaded + GUI
+* console
+* GUI
 
 ## Details
 
@@ -16,17 +14,11 @@ codes (skein-mac512) is derived from a salt and a passphrase (pbkdf2, 1000
 iterations of skein512).
 * The first mac is computed on the cipher tweak and the initialization vector.
 * The cleartext is encrypted by the cipher in counter mode.
-* A mac is computed on the ciphertext for each 1 MiB block of ciphertext.
-* The last block of ciphertext can be smaller than 1 MiB (depending on the
-size of the cleartext).
+* A mac is computed on the ciphertext.
 
 Format of the encrypted file:
 
-    | salt (16 B) | tweak (16 B) | iv (64 B) | mac (64 B) | block | ... | block |
-
-Format of a block:
-
-    | ciphertext (1 MiB) | mac (64 B) |
+    | salt (16 B) | tweak (16 B) | iv (64 B) | mac (64 B) | ciphertext | mac (64 B) |
 
 ## Dependencies
 
@@ -34,16 +26,6 @@ Format of a block:
 with ccl, ecl and clisp, but 200 times slower).
 * [ironclad](http://cliki.net/Ironclad)
 * [babel](http://www.cliki.net/Babel)
-
-If you want to use the multi-threaded version, you will also need:
-
-* [lparallel](http://lparallel.org/)
-* [trivial-features](http://www.cliki.net/trivial-features)
-
-If you want to use the multi-threaded version on an operating system other than
-GNU/Linux, you will also need:
-
-* [inferior-shell](http://gitlab.common-lisp.net/qitab/inferior-shell)
 
 If you want to use the Qt GUI, you will also need:
 
@@ -58,24 +40,14 @@ These libraries can be installed easily with [quicklisp](http://www.quicklisp.or
 
 ## Examples
 
-To encrypt a file with the multi-threaded version:
+To encrypt a file:
 
     (require 'clcrypt)
     (clcrypt:encrypt-file "cleartext.file" "ciphertext.file" "passphrase")
 
-To decrypt a file with the single-threaded version:
-
-    (require 'clcrypt-nt)
-    (clcrypt:decrypt-file "ciphertext.file" "cleartext.file" "passphrase")
-
-To start the GUI with the multi-threaded version:
+To start the GUI:
 
     (require 'clcrypt-gui)
-    (clcrypt:gui)
-
-To start the GUI with the single-threaded version:
-
-    (require 'clcrypt-gui-nt)
     (clcrypt:gui)
 
 ## Executable
@@ -86,18 +58,10 @@ To build all the versions:
 
     make
 
-To build the multi-threaded version:
+To build the console version:
 
     make clcrypt
 
-To build the multi-threaded + GUI version:
+To build the GUI version:
 
     make clcrypt-gui
-
-To build the single-threaded version:
-
-    make clcrypt-nt
-
-To build the single-threaded + GUI version:
-
-    make clcrypt-gui-nt

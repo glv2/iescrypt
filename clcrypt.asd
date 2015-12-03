@@ -26,12 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :version "1.0"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
-  :depends-on (babel
-               #-linux inferior-shell
-               ironclad
-               lparallel
-               trivial-features)
+  :depends-on (babel ironclad)
   :components ((:module "src"
-                        :components ((:file "clcrypt" :depends-on ("common" "package"))
-                                     (:file "common" :depends-on ("package"))
+                        :components ((:file "clcrypt" :depends-on ("package"))
                                      (:file "package")))))

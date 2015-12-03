@@ -21,29 +21,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 (defpackage clcrypt
-  (:use cl qt)
-  (:import-from babel
-                string-to-octets)
-  #-linux (:import-from inferior-shell
-                        run/s)
+  (:use cl :qt)
   (:import-from ironclad
                 block-length
-                decrypt-in-place
                 digest-length
-                encrypt-in-place
-                make-cipher
-                make-prng
-                make-skein-mac
                 pbkdf2-hash-password
+                make-prng
                 random-data
-                skein-mac-digest
-                update-skein-mac)
-  (:import-from lparallel
-                *kernel*
-                kernel-worker-count
-                make-channel
-                make-kernel
-                receive-result
-                submit-task
-                try-receive-result)
+                make-cipher
+                encrypt-in-place
+                decrypt-in-place
+                make-skein-mac
+                update-skein-mac
+                skein-mac-digest)
+  (:import-from babel
+                string-to-octets)
   (:export gui))
