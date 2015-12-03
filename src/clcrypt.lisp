@@ -23,14 +23,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (in-package clcrypt)
 
 
-(defparameter +cipher+ :threefish512)
-(defparameter +digest+ :skein512)
-(defparameter +cipher-block-length+ (block-length +cipher+)) ; 64 bytes
-(defparameter +tweak-length+ 16)
-(defparameter +salt-length+ 16)
-(defparameter +iterations+ 1000)
-(defparameter +mac-length+ (digest-length +digest+)) ; 64 bytes
-(defparameter +buffer-size+ 1048576) ; 1 MiB, 16384 cipher blocks of 64 bytes
+(defconstant +cipher+ :threefish512)
+(defconstant +digest+ :skein512)
+(defconstant +cipher-block-length+ (block-length +cipher+)) ; 64 bytes
+(defconstant +tweak-length+ 16)
+(defconstant +salt-length+ 16)
+(defconstant +iterations+ 1000)
+(defconstant +mac-length+ (digest-length +digest+)) ; 64 bytes
+(defconstant +buffer-size+ 1048576) ; 1 MiB, 16384 cipher blocks of 64 bytes
 
 
 (defun passphrase-to-key (passphrase salt)
