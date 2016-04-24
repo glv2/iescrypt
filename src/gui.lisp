@@ -119,7 +119,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (#_setWindowTitle instance "clcrypt - encrypting...")
       (#_repaint instance)
       (handler-case
-          (encrypt-file input-file output-file passphrase)
+          (encrypt-file input-file output-file :passphrase passphrase)
         (t (err) (setf error (format nil "~a" err))))
       (#_setWindowTitle instance "clcrypt")
       (#_repaint instance)
@@ -151,7 +151,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (#_setWindowTitle instance "clcrypt - decrypting...")
       (#_repaint instance)
       (handler-case
-          (decrypt-file input-file output-file passphrase)
+          (decrypt-file input-file output-file :passphrase passphrase)
         (t (err) (setf error (format nil "~a" err))))
       (#_setWindowTitle instance "clcrypt")
       (#_repaint instance)
