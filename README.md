@@ -9,16 +9,22 @@ There are two versions of it:
 
 ## Details
 
-* The key for the cipher (threefish512) and the message authentication
-codes (skein-mac512) is derived from a salt and a passphrase (pbkdf2, 1000
-iterations of skein512).
-* The first mac is computed on the cipher tweak and the initialization vector.
+Format of the encrypted file for symmetric mode:
+
+    | salt (32 B) | tweak (16 B) | iv (64 B) | ciphertext | mac (64 B) |
+
+Format of the encrypted file for public key mode:
+
+    | parameter (32 B) | ciphertext | mac (64 B) |
+
+* In symmetric mode, the keys for the cipher (threefish512) and the message
+authentication code (skein-mac512) are derived from a salt and a
+passphrase (pbkdf2, 1000 iterations of skein512).
+* In public key mode, the keys for the cipher (threefish512) and the message
+authentication code (skein-mac512) are derived from a parameter and a
+key (curve25519).
 * The cleartext is encrypted by the cipher in counter mode.
-* A mac is computed on the ciphertext.
-
-Format of the encrypted file:
-
-    | salt (16 B) | tweak (16 B) | iv (64 B) | mac (64 B) | ciphertext | mac (64 B) |
+* The mac is computed on the ciphertext.
 
 ## Dependencies
 
@@ -43,7 +49,7 @@ These libraries can be installed easily with [quicklisp](http://www.quicklisp.or
 To encrypt a file:
 
     (require 'clcrypt)
-    (clcrypt:encrypt-file "cleartext.file" "ciphertext.file" "passphrase")
+    (clcrypt:encrypt-file "cleartext.file" "ciphertext.file" :passphrase "passphrase")
 
 To start the GUI:
 

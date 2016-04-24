@@ -31,11 +31,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 make-cipher
                 encrypt-in-place
                 decrypt-in-place
-                make-skein-mac
-                update-skein-mac
-                skein-mac-digest)
+                ies-encrypt-stream
+                ies-decrypt-stream
+                generate-key-pair
+                make-public-key
+                make-private-key
+                curve25519-key-x
+                curve25519-key-y
+                make-hmac
+                update-hmac
+                hmac-digest)
   (:import-from babel
                 string-to-octets)
   (:export encrypt-file
            decrypt-file
+           make-key-pair
+           read-public-key
+           read-private-key
+           read-passphrase
            main))
