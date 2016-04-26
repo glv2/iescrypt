@@ -2,29 +2,39 @@
 
 The clcrypt program encrypts and decrypts files.
 
+It can be used in two modes:
+
+* Symmetric mode
+* Public key mode
+
 There are two versions of it:
 
-* console
+* Console
 * GUI
 
-## Details
+## Symmetric mode
 
-Format of the encrypted file for symmetric mode:
+Format of the encrypted file in symmetric mode:
 
     | salt (32 B) | tweak (16 B) | iv (64 B) | ciphertext | mac (64 B) |
 
-Format of the encrypted file for public key mode:
+The keys for the cipher (threefish512) and the message authentication
+code (hmac using skein512) are derived from a salt and a
+passphrase (pbkdf2, 1000 iterations of skein512).
+The cleartext is encrypted by the cipher in counter mode.
+The mac is computed on the ciphertext.
+
+## Public key mode
+
+Format of the encrypted file in public key mode:
 
     | parameter (32 B) | ciphertext | mac (64 B) |
 
-* In symmetric mode, the keys for the cipher (threefish512) and the message
-authentication code (skein-mac512) are derived from a salt and a
-passphrase (pbkdf2, 1000 iterations of skein512).
-* In public key mode, the keys for the cipher (threefish512) and the message
-authentication code (skein-mac512) are derived from a parameter and a
+The keys for the cipher (threefish512) and the message authentication
+code (hmac using skein512) are derived from a parameter and a
 key (curve25519).
-* The cleartext is encrypted by the cipher in counter mode.
-* The mac is computed on the ciphertext.
+The cleartext is encrypted by the cipher in counter mode.
+The mac is computed on the ciphertext.
 
 ## Dependencies
 
@@ -46,10 +56,18 @@ These libraries can be installed easily with [quicklisp](http://www.quicklisp.or
 
 ## Examples
 
-To encrypt a file:
+To encrypt and decrypt a file in symmetric mode:
 
-    (require 'clcrypt)
-    (clcrypt:encrypt-file "cleartext.file" "ciphertext.file" :passphrase "passphrase")
+    (clcrypt:encrypt-file "clear.file" "cipher.file" :passphrase "passphrase")
+    (clcrypt:decrypt-file "cipher.file" "clear.file" :passphrase "passphrase")
+
+To encrypt and decrypt a file in public key mode:
+
+    (clcrypt:make-key-pair "key")
+    (let ((pubkey (clcrypt:read-public-key "key.pub")
+          (privkey (clcrypt:read-private-key "key"))))
+      (clcrypt:encrypt-file "clear.file" "cipher.file" :public-key pubkey)
+      (clcrypt:decrypt-file "cipher.file" "clear.file" :private-key privkey))
 
 To start the GUI:
 
