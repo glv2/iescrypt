@@ -23,24 +23,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defpackage clcrypt
   (:use cl)
   (:import-from ironclad
-                block-length
-                digest-length
-                pbkdf2-hash-password
-                make-prng
-                random-data
-                make-cipher
-                encrypt-in-place
-                decrypt-in-place
                 ies-encrypt-stream
                 ies-decrypt-stream
                 generate-key-pair
                 make-public-key
                 make-private-key
                 curve25519-key-x
-                curve25519-key-y
-                make-hmac
-                update-hmac
-                hmac-digest)
+                curve25519-key-y)
   (:import-from babel
                 string-to-octets)
   (:export encrypt-file

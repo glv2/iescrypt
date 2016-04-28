@@ -25,16 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defconstant +cipher+ :threefish512)
 (defconstant +digest+ :skein512)
-(defconstant +cipher-block-length+ (block-length +cipher+)) ; 64 bytes
-(defconstant +cipher-key-length+ +cipher-block-length+)
-(defconstant +tweak-length+ 16)
-(defconstant +salt-length+ 32)
-(defconstant +iterations+ 1000)
-(defconstant +mac-length+ (digest-length +digest+)) ; 64 bytes
-(defconstant +mac-key-length+ +mac-length+)
-(defconstant +buffer-size+ 1048576) ; 1 MiB, 16384 cipher blocks of 64 bytes
-
-(defparameter *prng* (make-prng :fortuna :seed :random))
 
 
 (defun read-file (filename)
@@ -55,116 +45,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         (error "Could not read passphrase from file."))
       passphrase)))
 
-(defun passphrase-to-key (passphrase salt)
-  "Generate a key from a PASSPHRASE and a SALT."
-  (let ((passdata (string-to-octets passphrase :encoding :utf-8)))
-    (pbkdf2-hash-password passdata
-                          :digest +digest+
-                          :salt salt
-                          :iterations +iterations+)))
+(defun read-public-key (filename)
+  (let ((public-key (read-file filename)))
+    (unless (= (length public-key) 32)
+      (error "Too short for a public key"))
+    public-key))
 
-(defun encrypt-file-symmetric (input-file output-file passphrase)
-  (let* ((salt (random-data +salt-length+ *prng*))
-         (tweak (random-data +tweak-length+ *prng*))
-         (iv (random-data +cipher-block-length+ *prng*))
-         (key (passphrase-to-key passphrase salt))
-         (cipher (make-cipher +cipher+
-                              :key key
-                              :tweak tweak
-                              :mode :ctr
-                              :initialization-vector iv))
-         (mac (make-hmac key +digest+)))
-
-    ;; Write header
-    (write-sequence salt output-file)
-    (write-sequence tweak output-file)
-    (write-sequence iv output-file)
-
-    (do ((buffer (make-array +buffer-size+ :element-type '(unsigned-byte 8)))
-         (text-length 0)
-         (first-block t)
-         (end-of-file nil))
-        (end-of-file)
-
-      ;; Read plaintext
-      (setf text-length (read-sequence buffer input-file))
-      (when (< text-length +buffer-size+)
-        (setf end-of-file t))
-
-      (when (or (plusp text-length) first-block)
-        (setf first-block nil)
-
-        ;; Encrypt plaintext
-        (encrypt-in-place cipher buffer :end text-length)
-        (update-hmac mac buffer :end text-length)
-
-        ;; Write ciphertext
-        (write-sequence buffer output-file :end text-length)))
-
-    ;; Write mac
-    (write-sequence (hmac-digest mac) output-file)))
-
-(defun decrypt-file-symmetric (input-file output-file passphrase)
-  (let ((salt (make-array +salt-length+ :element-type '(unsigned-byte 8)))
-        (tweak (make-array +tweak-length+ :element-type '(unsigned-byte 8)))
-        (iv (make-array +cipher-block-length+ :element-type '(unsigned-byte 8)))
-        (old-mac (make-array +mac-length+ :element-type '(unsigned-byte 8)))
-        key cipher mac)
-
-    ;; Read header
-    (unless (= (read-sequence salt input-file) +salt-length+)
-      (error "Could not read the salt from the input stream."))
-    (unless (= (read-sequence tweak input-file) +tweak-length+)
-      (error "Could not read the tweak from the input stream."))
-    (unless (= (read-sequence iv input-file) +cipher-block-length+)
-      (error "Could not read the initialization vector from the input stream."))
-
-    ;; Generate key
-    (setf key (passphrase-to-key passphrase salt))
-    (setf cipher (make-cipher +cipher+
-                              :key key
-                              :tweak tweak
-                              :mode :ctr
-                              :initialization-vector iv))
-    (setf mac (make-hmac key +digest+))
-
-    (do ((buffer (make-array (+ +buffer-size+ +mac-length+)
-                             :element-type '(unsigned-byte 8)))
-         (text-length 0)
-         (first-block t)
-         (end-of-file nil))
-        (end-of-file)
-
-      ;; Read ciphertext and mac
-      (setf text-length (read-sequence buffer input-file :start text-length))
-      (when (< text-length (+ +buffer-size+ +mac-length+))
-        (setf end-of-file t))
-
-      (when (or (plusp text-length) first-block)
-        (setf first-block nil)
-
-        ;; Check that we have enough data for the mac
-        (when (< text-length +mac-length+)
-          (error "Could not read the mac from the input stream."))
-        (decf text-length +mac-length+)
-
-        ;; Keep the last +mac-length+ bytes (it might be the mac)
-        (replace old-mac buffer :end1 +mac-length+ :start2 text-length)
-
-        ;; Decrypt ciphertext
-        (update-hmac mac buffer :end text-length)
-        (decrypt-in-place cipher buffer :end text-length)
-
-        ;; Write plaintext
-        (write-sequence buffer output-file :end text-length)
-
-        ;; Put remaining data at the beginning of buffer
-        (replace buffer old-mac)
-        (setf text-length +mac-length+)))
-
-    ;; Chech mac
-    (unless (equalp old-mac (hmac-digest mac))
-      (error "Invalid MAC."))))
+(defun read-private-key (filename)
+  (let ((private-key (read-file filename)))
+    (unless (= (length private-key) 32)
+      (error "Too short for a private key"))
+    private-key))
 
 (defun make-key-pair (filename)
   (with-open-file (file-skey filename
@@ -179,26 +70,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         (write-sequence (curve25519-key-x skey) file-skey)
         (write-sequence (curve25519-key-y pkey) file-pkey)))))
 
-(defun read-public-key (filename)
-  (let ((public-key (read-file filename)))
-    (unless (= (length public-key) 32)
-      (error "Too short for a public key"))
-    public-key))
-
-(defun read-private-key (filename)
-  (let ((private-key (read-file filename)))
-    (unless (= (length private-key) 32)
-      (error "Too short for a private key"))
-    private-key))
-
-(defun encrypt-file-ies (input-file output-file pubkey)
-  (let ((pkey (make-public-key :curve25519 :y pubkey)))
-    (ies-encrypt-stream pkey +cipher+ +digest+ input-file output-file)))
-
-(defun decrypt-file-ies (input-file output-file privkey)
-  (let ((skey (make-private-key :curve25519 :x privkey)))
-    (ies-decrypt-stream skey +cipher+ +digest+ input-file output-file)))
-
 (defun encrypt-file (input-filename output-filename &key passphrase public-key)
   (with-open-file (input input-filename
                          :direction :input
@@ -208,9 +79,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                             :element-type '(unsigned-byte 8)
                             :if-exists :supersede)
       (cond (passphrase
-             (encrypt-file-symmetric input output passphrase))
+             (ies-encrypt-stream (string-to-octets passphrase :encoding :utf-8)
+                                 +cipher+
+                                 +digest+
+                                 input
+                                 output))
             (public-key
-             (encrypt-file-ies input output public-key))
+             (ies-encrypt-stream (make-public-key :curve25519 :y public-key)
+                                 +cipher+
+                                 +digest+
+                                 input
+                                 output))
             (t
              (error "Passphrase or public key must be specified."))))))
 
@@ -223,9 +102,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                             :element-type '(unsigned-byte 8)
                             :if-exists :supersede)
       (cond (passphrase
-             (decrypt-file-symmetric input output passphrase))
+             (ies-decrypt-stream (string-to-octets passphrase :encoding :utf-8)
+                                 +cipher+
+                                 +digest+
+                                 input
+                                 output))
             (private-key
-             (decrypt-file-ies input output private-key))
+             (ies-decrypt-stream (make-private-key :curve25519 :x private-key)
+                                 +cipher+
+                                 +digest+
+                                 input
+                                 output))
             (t
              (error "Passphrase or private key must be specified."))))))
 

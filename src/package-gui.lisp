@@ -23,17 +23,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defpackage clcrypt
   (:use cl :qt)
   (:import-from ironclad
-                block-length
-                digest-length
-                pbkdf2-hash-password
-                make-prng
-                random-data
-                make-cipher
-                encrypt-in-place
-                decrypt-in-place
-                make-skein-mac
-                update-skein-mac
-                skein-mac-digest)
+                ies-encrypt-stream
+                ies-decrypt-stream
+                generate-key-pair
+                make-public-key
+                make-private-key
+                curve25519-key-x
+                curve25519-key-y)
   (:import-from babel
                 string-to-octets)
   (:export gui))

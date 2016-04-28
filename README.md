@@ -12,27 +12,15 @@ There are two versions of it:
 * Console
 * GUI
 
-## Symmetric mode
+## Details
 
-Format of the encrypted file in symmetric mode:
-
-    | salt (32 B) | tweak (16 B) | iv (64 B) | ciphertext | mac (64 B) |
-
-The keys for the cipher (threefish512) and the message authentication
-code (hmac using skein512) are derived from a salt and a
-passphrase (pbkdf2, 1000 iterations of skein512).
-The cleartext is encrypted by the cipher in counter mode.
-The mac is computed on the ciphertext.
-
-## Public key mode
-
-Format of the encrypted file in public key mode:
+Format of the encrypted file:
 
     | parameter (32 B) | ciphertext | mac (64 B) |
 
 The keys for the cipher (threefish512) and the message authentication
-code (hmac using skein512) are derived from a parameter and a
-key (curve25519).
+code (hmac using skein512) are derived from a parameter (salt) and either a
+passphrase (pbkdf2, 100 iterations of skein512) or an ECC key (curve25519).
 The cleartext is encrypted by the cipher in counter mode.
 The mac is computed on the ciphertext.
 
