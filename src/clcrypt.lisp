@@ -24,7 +24,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 (defconstant +cipher+ :threefish512)
-(defconstant +digest+ :skein512)
+(defconstant +digest+ :blake2)
+(defconstant +kdf-iterations+ 10000)
 
 
 (defun read-file (filename)
@@ -83,13 +84,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                  +cipher+
                                  +digest+
                                  input
-                                 output))
+                                 output
+                                 :kdf-iterations +kdf-iterations+))
             (public-key
              (ies-encrypt-stream (make-public-key :curve25519 :y public-key)
                                  +cipher+
                                  +digest+
                                  input
-                                 output))
+                                 output
+                                 :kdf-iterations +kdf-iterations+))
             (t
              (error "Passphrase or public key must be specified."))))))
 
@@ -106,13 +109,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                  +cipher+
                                  +digest+
                                  input
-                                 output))
+                                 output
+                                 :kdf-iterations +kdf-iterations+))
             (private-key
              (ies-decrypt-stream (make-private-key :curve25519 :x private-key)
                                  +cipher+
                                  +digest+
                                  input
-                                 output))
+                                 output
+                                 :kdf-iterations +kdf-iterations+))
             (t
              (error "Passphrase or private key must be specified."))))))
 

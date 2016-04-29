@@ -16,13 +16,21 @@ There are two versions of it:
 
 Format of the encrypted file:
 
-    | parameter (32 B) | ciphertext | mac (64 B) |
+    | salt | parameter | ciphertext | mac |
 
-The keys for the cipher (threefish512) and the message authentication
-code (hmac using skein512) are derived from a parameter (salt) and either a
-passphrase (pbkdf2, 100 iterations of skein512) or an ECC key (curve25519).
-The cleartext is encrypted by the cipher in counter mode.
-The mac is computed on the ciphertext.
+Size of the fields:
+* salt: 32 bytes
+* parameter: 0 bytes in symmetric mode and 32 bytes in public key mode
+* mac: 64 bytes
+
+Encryption process:
+* The cleartext is encrypted by the cipher (threefish512) in counter mode.
+* The mac (hmac using blake2) is computed on the ciphertext.
+* The key and the initialization vector for the cipher and the key for the
+message authentication code are derived from a salt and a passphrase in
+symmetric mode, and from a salt, a parameter and an ECC key (curve25519) in
+public key mode (pbkdf2, 10000 iterations of blake2).
+
 
 ## Dependencies
 
