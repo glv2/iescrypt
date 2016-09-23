@@ -162,7 +162,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (ies-decrypt-stream-common k s kdf-salt kdf-iterations cipher-name digest-name input output
                                  :shared1 shared1 :shared2 shared2))))
 
-(defmethod ies-encrypt-stream ((passphrase simple-array) cipher-name digest-name input output
+(defmethod ies-encrypt-stream ((passphrase array) cipher-name digest-name input output
                                &key (kdf-iterations 10000) shared1 shared2)
   (let* ((prng (or *prng* (make-prng :fortuna :seed :random)))
          (kdf-salt (random-data 32 prng))
@@ -170,7 +170,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (ies-encrypt-stream-common empty passphrase kdf-salt kdf-iterations cipher-name digest-name input output
                                :shared1 shared1 :shared2 shared2)))
 
-(defmethod ies-decrypt-stream ((passphrase simple-array) cipher-name digest-name input output
+(defmethod ies-decrypt-stream ((passphrase array) cipher-name digest-name input output
                              &key (kdf-iterations 10000) shared1 shared2)
   (let ((kdf-salt (make-array 32 :element-type '(unsigned-byte 8)))
         (empty (make-array 0 :element-type '(unsigned-byte 8))))
