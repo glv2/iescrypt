@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :license "GPL-3"
   :depends-on (babel ironclad qt)
   :components ((:module "src"
-                        :components ((:file "clcrypt" :depends-on ("package-gui"))
-                                     (:file "gui" :depends-on ("clcrypt" "package-gui"))
-                                     (:file "package-gui")))))
+                :components ((:file "clcrypt" :depends-on ("package-gui"))
+                             (:file "gui" :depends-on ("clcrypt" "package-gui"))
+                             (:file "ies")
+                             (:file "package-gui" :depends-on ("ies"))))))

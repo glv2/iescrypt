@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (in-package clcrypt)
 
 
-(defconstant +cipher+ :threefish512)
+(defconstant +cipher+ :chacha)
 (defconstant +digest+ :blake2)
 (defconstant +kdf-iterations+ 10000)
 

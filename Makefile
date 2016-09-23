@@ -2,12 +2,12 @@
 
 all: clcrypt clcrypt-gui
 
-clcrypt: clcrypt.asd src/package.lisp src/clcrypt.lisp
+clcrypt: clcrypt.asd src/ies.lisp src/package.lisp src/clcrypt.lisp
 	sbcl \
 		--no-userinit \
 		--no-sysinit \
 		--non-interactive \
-		--load ~/quicklisp/setup.lisp \
+		--load ~/.quicklisp/setup.lisp \
 		--eval '(ql:quickload :clcrypt)' \
 		--eval '(ql:write-asdf-manifest-file "asdf-manifest.txt" :if-exists :supersede)' \
 		--eval '(quit)'
@@ -18,12 +18,12 @@ clcrypt: clcrypt.asd src/package.lisp src/clcrypt.lisp
 		--entry "clcrypt:main" \
 		--compress-core
 
-clcrypt-gui: clcrypt-gui.asd src/package-gui.lisp src/clcrypt.lisp src/gui.lisp
+clcrypt-gui: clcrypt-gui.asd src/ies.lisp src/package-gui.lisp src/clcrypt.lisp src/gui.lisp
 	sbcl \
 		--no-userinit \
 		--no-sysinit \
 		--non-interactive \
-		--load ~/quicklisp/setup.lisp \
+		--load ~/.quicklisp/setup.lisp \
 		--eval '(ql:quickload :clcrypt-gui)' \
 		--eval '(ql:write-asdf-manifest-file "asdf-manifest.txt" :if-exists :supersede)' \
 		--eval '(quit)'
