@@ -2,7 +2,7 @@
 
 #|
 
-Copyright 2015 Guillaume LE VAILLANT
+Copyright 2015-2016 Guillaume LE VAILLANT
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,16 +25,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (:import-from ironclad
                 ies-encrypt-stream
                 ies-decrypt-stream
+                digest-file
+                sign-message
+                verify-signature
                 generate-key-pair
                 make-public-key
                 make-private-key
                 curve25519-key-x
-                curve25519-key-y)
+                curve25519-key-y
+                ed25519-key-x
+                ed25519-key-y)
   (:import-from babel
                 string-to-octets)
   (:export encrypt-file
            decrypt-file
-           make-key-pair
+           sign-file
+           verify-file-signature
+           make-encryption-key-pair
+           make-signature-key-pair
            read-public-key
            read-private-key
            read-passphrase

@@ -49,16 +49,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defun read-public-key (filename)
   (let ((public-key (read-file filename)))
     (unless (= (length public-key) 32)
-      (error "Too short for a public key"))
+      (error "Public key too short."))
     public-key))
 
 (defun read-private-key (filename)
   (let ((private-key (read-file filename)))
     (unless (= (length private-key) 32)
-      (error "Too short for a private key"))
+      (error "Private key too short."))
     private-key))
 
-(defun make-key-pair (filename)
+(defun make-encryption-key-pair (filename)
   (with-open-file (file-skey filename
                              :direction :output
                              :element-type '(unsigned-byte 8)
@@ -70,6 +70,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (multiple-value-bind (skey pkey) (generate-key-pair :curve25519)
         (write-sequence (curve25519-key-x skey) file-skey)
         (write-sequence (curve25519-key-y pkey) file-pkey)))))
+
+(defun make-signing-key-pair (filename)
+  (with-open-file (file-skey filename
+                             :direction :output
+                             :element-type '(unsigned-byte 8)
+                             :if-exists :supersede)
+    (with-open-file (file-pkey (concatenate 'string filename ".pub")
+                               :direction :output
+                               :element-type '(unsigned-byte 8)
+                               :if-exists :supersede)
+      (multiple-value-bind (skey pkey) (generate-key-pair :ed25519)
+        (write-sequence (ed25519-key-x skey) file-skey)
+        (write-sequence (ed25519-key-y pkey) file-pkey)))))
 
 (defun encrypt-file (input-filename output-filename &key passphrase public-key)
   (with-open-file (input input-filename
@@ -121,6 +134,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             (t
              (error "Passphrase or private key must be specified."))))))
 
+(defun sign-file (input-filename signature-filename private-key-filename)
+  (let* ((sk (read-private-key private-key-filename))
+         (private-key (make-private-key :ed25519 :x sk))
+         (hash (digest-file +digest+ input-filename))
+         (signature (sign-message private-key hash)))
+    (with-open-file (file-sig signature-filename
+                              :direction :output
+                              :element-type '(unsigned-byte 8)
+                              :if-exists :supersede)
+      (write-sequence signature file-sig))))
+
+(defun verify-file-signature (input-filename signature-file public-key-filename)
+  (let* ((pk (read-public-key public-key-filename))
+         (public-key (make-public-key :ed25519 :y pk))
+         (hash (digest-file +digest+ input-filename))
+         (signature (read-file signature-file)))
+    (unless (= (length signature) 64)
+      (error "Bad signature length."))
+    (unless (verify-signature public-key hash signature)
+      (error "Bad signature."))
+    t))
+
 (defmacro with-raw-io ((&key (vmin 1) (vtime 0)) &body body)
   "Execute BODY without echoing input IO actions."
   (declare (ignorable vmin vtime))
@@ -148,93 +183,125 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
      (format *error-output* "Warning: could not disable the terminal echo.~%")
      ,@body))
 
+(defun get-passphrase (verify-passphrase)
+  "Get a passphrase from the user."
+  (write-string "Enter the passphrase: ")
+  (force-output)
+  (let ((passphrase (with-raw-io ()
+                      (read-line))))
+    (terpri)
+    (when verify-passphrase
+      (write-string "Enter the passphrase again: ")
+      (force-output)
+      (let ((passphrase-check (with-raw-io ()
+                                (read-line))))
+        (terpri)
+        (unless (string= passphrase passphrase-check)
+          (error "Passphrases don't match."))))
+    passphrase))
+
 (defun main (argv)
   "Entry point for standalone program."
   (handler-case
-      (let (symmetric-p decrypt-p input-filename output-filename passphrase passphrase-check key key-filename)
+      ;; Check arguments
+      (cond
+        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "pe"))
+         ;; Encrypt a file using a passphrase
+         (let* ((input-filename (elt argv 2))
+                (output-filename (elt argv 3))
+                (passphrase-filename (if (= (length argv) 5)
+                                         (elt argv 4)
+                                         nil))
+                (passphrase (if passphrase-filename
+                                (read-passphrase passphrase-filename)
+                                (get-passphrase t))))
+           (encrypt-file input-filename output-filename :passphrase passphrase)))
 
-        ;; Check arguments
-        (cond ((and (= (length argv) 6) (string= (elt argv 1) "-s") (string= (elt argv 2) "-d"))
-               (setf symmetric-p t
-                     decrypt-p t
-                     input-filename (elt argv 3)
-                     output-filename (elt argv 4)
-                     key-filename (elt argv 5)))
+        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "pd"))
+         ;; Decrypt a file using a passphrase
+         (let* ((input-filename (elt argv 2))
+                (output-filename (elt argv 3))
+                (passphrase-filename (if (= (length argv) 5)
+                                         (elt argv 4)
+                                         nil))
+                (passphrase (if passphrase-filename
+                                (read-passphrase passphrase-filename)
+                                (get-passphrase nil))))
+           (decrypt-file input-filename output-filename :passphrase passphrase)))
 
-              ((and (= (length argv) 6) (string= (elt argv 1) "-p") (string= (elt argv 2) "-d"))
-               (setf decrypt-p t
-                     input-filename (elt argv 3)
-                     output-filename (elt argv 4)
-                     key-filename (elt argv 5)))
+        ((and (= (length argv) 5) (string= (elt argv 1) "e"))
+         ;; Encrypt a file using a public key
+         (let* ((input-filename (elt argv 2))
+                (output-filename (elt argv 3))
+                (key-filename (elt argv 4))
+                (public-key (read-public-key key-filename)))
+           (encrypt-file input-filename output-filename :public-key public-key)))
 
-              ((and (= (length argv) 5) (string= (elt argv 1) "-s") (string= (elt argv 2) "-d"))
-               (setf symmetric-p t
-                     decrypt-p t
-                     input-filename (elt argv 3)
-                     output-filename (elt argv 4)))
+        ((and (= (length argv) 5) (string= (elt argv 1) "d"))
+         ;; Decrypt a file using a private key
+         (let* ((input-filename (elt argv 2))
+                (output-filename (elt argv 3))
+                (key-filename (elt argv 4))
+                (private-key (read-private-key key-filename)))
+           (decrypt-file input-filename output-filename :private-key private-key)))
 
-              ((and (= (length argv) 5) (string= (elt argv 1) "-s") (string/= (elt argv 2) "-d"))
-               (setf symmetric-p t
-                     input-filename (elt argv 2)
-                     output-filename (elt argv 3)
-                     key-filename (elt argv 4)))
+        ((and (= (length argv) 5) (string= (elt argv 1) "s"))
+         ;; Sign a file
+         (let ((input-filename (elt argv 2))
+               (signature-filename (elt argv 3))
+               (key-filename (elt argv 4)))
+           (sign-file input-filename signature-filename key-filename)))
 
-              ((and (= (length argv) 5) (string= (elt argv 1) "-p"))
-               (setf input-filename (elt argv 2)
-                     output-filename (elt argv 3)
-                     key-filename (elt argv 4)))
+        ((and (= (length argv) 5) (string= (elt argv 1) "v"))
+         ;; Verify a signature
+         (let ((input-filename (elt argv 2))
+               (signature-filename (elt argv 3))
+               (key-filename (elt argv 4)))
+           (if (verify-file-signature input-filename signature-filename key-filename)
+               (format t "Signature OK.~%"))))
 
-              ((and (= (length argv) 4) (string= (elt argv 1) "-s"))
-               (setf symmetric-p t
-                     input-filename (elt argv 2)
-                     output-filename (elt argv 3)))
+        ((and (= (length argv) 3) (string= (elt argv 1) "ge"))
+         ;; Generate an encryption key pair
+         (let ((key-filename (elt argv 2)))
+           (make-encryption-key-pair key-filename)))
 
-              ((and (= (length argv) 3) (string= (elt argv 1) "-g"))
-               (setf key-filename (elt argv 2)))
+        ((and (= (length argv) 3) (string= (elt argv 1) "gs"))
+         ;; Generate a signature key pair
+         (let ((key-filename (elt argv 2)))
+           (make-signing-key-pair key-filename)))
 
-              (t
-               (error (format nil "Usage:~%
-  Symmetric mode:  clcrypt -s [-d] <input file> <output file> [passphrase file]~%
-  Public key mode: clcrypt -p [-d] <input-file> <output file> <key file>~%
-  Key generation:  clcrypt -g <output file>~%~%"))))
+        (t
+         (error (format nil "Usage:
 
-        (cond (symmetric-p
-               ;; Get passphrase
-               (if key-filename
-                   (setf passphrase (read-passphrase key-filename))
-                   (progn
-                     (format *standard-output* "Enter the passphrase: ")
-                     (force-output *standard-output*)
-                     (setf passphrase (with-raw-io ()
-                                        (read-line *standard-input*)))
-                     (format *standard-output* "~%")
-                     (unless (or decrypt-p key-filename)
-                       (format *standard-output* "Enter the passphrase again: ")
-                       (force-output *standard-output*)
-                       (setf passphrase-check (with-raw-io ()
-                                                (read-line *standard-input*)))
-                       (format *standard-output* "~%")
-                       (unless (equal passphrase passphrase-check)
-                         (error "Passphrases don't match.")))))
+  clcrypt <command> <arguments>
 
-               ;; Encrypt or decrypt
-               (if decrypt-p
-                   (decrypt-file input-filename output-filename :passphrase passphrase)
-                   (encrypt-file input-filename output-filename :passphrase passphrase)))
+  Commands:
 
-              (input-filename
-               ;; Get public or private key
-               (setf key (read-file key-filename))
+    pe <input file> <output file> [passphrase file]
+      Encrypt a file using a passphrase.
 
-               ;; Encrypt or decrypt
-               (if decrypt-p
-                   (decrypt-file input-filename output-filename :private-key key)
-                   (encrypt-file input-filename output-filename :public-key key)))
+    pd <input file> <output file> [passphrase file]
+      Decrypt a file using a passphrase.
 
-              (t
-               (make-key-pair key-filename))))
+    e <input file> <output file> <public key file>
+      Encrypt a file for the owner of a public key.
 
-    (t (err) (progn
-               (format *error-output* "~%Error: ~a~%" err)
-               (return-from main -1))))
-  0)
+    d <input file> <output file> <private key file>
+      Decrypt a file that was encrypted with a public key using
+      the matching private key.
+
+    s <input file> <signature file> <private key file>
+      Create a signature of a file.
+
+    v <input-file> <signature-file> <public key file>
+      Verify a signature of a file.
+
+    ge <file name>
+       Generate a key pair for encryption. The private key is written
+       in 'file name' and the public key is written in 'file name.pub'.
+
+    gs <file name>
+       Generate a key pair for signature. The private key is written
+       in 'file name' and the public key is written in 'file name.pub'.~%"))))
+
+    (t (err) (format *error-output* "Error: ~a~%" err))))
