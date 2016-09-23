@@ -130,6 +130,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (ies-decrypt-stream-common p s kdf-salt kdf-iterations cipher-name digest-name input output
                                  :shared1 shared1 :shared2 shared2))))
 
+#|
 (defmethod ies-encrypt-stream ((public-key elgamal-public-key) cipher-name digest-name input output
                                &key (kdf-iterations 10000) shared1 shared2)
   (let* ((prng (or *prng* (make-prng :fortuna :seed :random)))
@@ -161,6 +162,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
            (s (integer-to-octets (expt-mod a x p) :n-bits pbits)))
       (ies-decrypt-stream-common k s kdf-salt kdf-iterations cipher-name digest-name input output
                                  :shared1 shared1 :shared2 shared2))))
+|#
 
 (defmethod ies-encrypt-stream ((passphrase array) cipher-name digest-name input output
                                &key (kdf-iterations 10000) shared1 shared2)
