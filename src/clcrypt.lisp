@@ -205,7 +205,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (handler-case
       ;; Check arguments
       (cond
-        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "pe"))
+        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "penc"))
          ;; Encrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -217,7 +217,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase t))))
            (encrypt-file input-filename output-filename :passphrase passphrase)))
 
-        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "pd"))
+        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "pdec"))
          ;; Decrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -229,7 +229,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase nil))))
            (decrypt-file input-filename output-filename :passphrase passphrase)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "e"))
+        ((and (= (length argv) 5) (string= (elt argv 1) "enc"))
          ;; Encrypt a file using a public key
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -237,7 +237,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 (public-key (read-public-key key-filename)))
            (encrypt-file input-filename output-filename :public-key public-key)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "d"))
+        ((and (= (length argv) 5) (string= (elt argv 1) "dec"))
          ;; Decrypt a file using a private key
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -245,14 +245,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 (private-key (read-private-key key-filename)))
            (decrypt-file input-filename output-filename :private-key private-key)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "s"))
+        ((and (= (length argv) 5) (string= (elt argv 1) "sign"))
          ;; Sign a file
          (let ((input-filename (elt argv 2))
                (signature-filename (elt argv 3))
                (key-filename (elt argv 4)))
            (sign-file input-filename signature-filename key-filename)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "v"))
+        ((and (= (length argv) 5) (string= (elt argv 1) "verif"))
          ;; Verify a signature
          (let ((input-filename (elt argv 2))
                (signature-filename (elt argv 3))
@@ -260,48 +260,48 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
            (if (verify-file-signature input-filename signature-filename key-filename)
                (format t "Signature OK.~%"))))
 
-        ((and (= (length argv) 3) (string= (elt argv 1) "ge"))
+        ((and (= (length argv) 3) (string= (elt argv 1) "gen-enc"))
          ;; Generate an encryption key pair
          (let ((key-filename (elt argv 2)))
            (make-encryption-key-pair key-filename)))
 
-        ((and (= (length argv) 3) (string= (elt argv 1) "gs"))
+        ((and (= (length argv) 3) (string= (elt argv 1) "gen-sig"))
          ;; Generate a signature key pair
          (let ((key-filename (elt argv 2)))
            (make-signing-key-pair key-filename)))
 
         (t
-         (error (format nil "Usage:
+         (error (format nil "Bad command or arguments.
 
-  clcrypt <command> <arguments>
+Usage: clcrypt <command> <arguments>
 
-  Commands:
+Commands:
 
-    pe <input file> <output file> [passphrase file]
-      Encrypt a file using a passphrase.
+  penc <input file> <output file> [passphrase file]
+    Encrypt a file using a passphrase.
 
-    pd <input file> <output file> [passphrase file]
-      Decrypt a file using a passphrase.
+  pdec <input file> <output file> [passphrase file]
+    Decrypt a file using a passphrase.
 
-    e <input file> <output file> <public key file>
-      Encrypt a file for the owner of a public key.
+  enc <input file> <output file> <public key file>
+    Encrypt a file for the owner of a public key.
 
-    d <input file> <output file> <private key file>
-      Decrypt a file that was encrypted with a public key using
-      the matching private key.
+  dec <input file> <output file> <private key file>
+    Decrypt a file that was encrypted with a public key using
+    the matching private key.
 
-    s <input file> <signature file> <private key file>
-      Create a signature of a file.
+  sign <input file> <signature file> <private key file>
+    Create a signature of a file.
 
-    v <input-file> <signature-file> <public key file>
-      Verify a signature of a file.
+  verif <input-file> <signature-file> <public key file>
+    Verify a signature of a file.
 
-    ge <file name>
-       Generate a key pair for encryption. The private key is written
-       in 'file name' and the public key is written in 'file name.pub'.
+  gen-enc <file name>
+     Generate a key pair for encryption. The private key is written
+     in 'file name' and the public key is written in 'file name.pub'.
 
-    gs <file name>
-       Generate a key pair for signature. The private key is written
-       in 'file name' and the public key is written in 'file name.pub'.~%"))))
+  gen-sig <file name>
+     Generate a key pair for signature. The private key is written
+     in 'file name' and the public key is written in 'file name.pub'.~%"))))
 
     (t (err) (format *error-output* "Error: ~a~%" err))))
