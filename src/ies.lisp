@@ -131,40 +131,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (ies-decrypt-stream-common p s kdf-salt kdf-iterations cipher-name digest-name input output
                                  :shared1 shared1 :shared2 shared2))))
 
-#|
-(defmethod ies-encrypt-stream ((public-key elgamal-public-key) cipher-name digest-name input output
-                               &key (kdf-iterations 10000) shared1 shared2)
-  (let* ((prng (or *prng* (make-prng :fortuna :seed :random)))
-         (kdf-salt (random-data 32 prng))
-         (p (elgamal-key-p public-key))
-         (pbits (integer-length p))
-         (g (elgamal-key-g public-key))
-         (y (elgamal-key-y public-key))
-         (r (+ 2 (strong-random (- p 3) prng)))
-         (k (integer-to-octets (expt-mod g r p) :n-bits pbits))
-         (s (integer-to-octets (expt-mod y r p) :n-bits pbits)))
-    (ies-encrypt-stream-common k s kdf-salt kdf-iterations cipher-name digest-name input output
-                               :shared1 shared1 :shared2 shared2)))
-
-(defmethod ies-decrypt-stream ((private-key elgamal-private-key) cipher-name digest-name input output
-                               &key (kdf-iterations 10000) shared1 shared2)
-  (let* ((kdf-salt (make-array 32 :element-type '(unsigned-byte 8)))
-         (p (elgamal-key-p private-key))
-         (pbits (integer-length p))
-         (g (elgamal-key-g private-key))
-         (x (elgamal-key-x private-key))
-         (parameter-length (/ +curve25519-bits+ 8))
-         (k (make-array parameter-length :element-type '(unsigned-byte 8))))
-    (unless (= (read-sequence kdf-salt input) 32)
-      (error "Input stream too short"))
-    (unless (= (read-sequence k input) parameter-length)
-      (error "Input stream too short"))
-    (let* ((a (octets-to-integer k))
-           (s (integer-to-octets (expt-mod a x p) :n-bits pbits)))
-      (ies-decrypt-stream-common k s kdf-salt kdf-iterations cipher-name digest-name input output
-                                 :shared1 shared1 :shared2 shared2))))
-|#
-
 (defmethod ies-encrypt-stream ((passphrase array) cipher-name digest-name input output
                                &key (kdf-iterations 10000) shared1 shared2)
   (let* ((prng (or *prng* (make-prng :fortuna :seed :random)))
