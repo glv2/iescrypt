@@ -67,6 +67,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defun ies-decrypt-stream-common (parameter shared-secret kdf-salt kdf-iterations cipher-name digest-name input output
                                   &key shared1 shared2)
+  (declare (ignore parameter))
   (let* ((passphrase (if shared1
                          (concatenate '(simple-array (unsigned-byte 8) (*)) shared-secret shared1)
                          shared-secret))
@@ -168,15 +169,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                &key (kdf-iterations 10000) shared1 shared2)
   (let* ((prng (or *prng* (make-prng :fortuna :seed :random)))
          (kdf-salt (random-data 32 prng))
-         (empty (make-array 0 :element-type '(unsigned-byte 8))))
-    (ies-encrypt-stream-common empty passphrase kdf-salt kdf-iterations cipher-name digest-name input output
+         (parameter (random-data 32 prng)))
+    (ies-encrypt-stream-common parameter passphrase kdf-salt kdf-iterations cipher-name digest-name input output
                                :shared1 shared1 :shared2 shared2)))
 
 (defmethod ies-decrypt-stream ((passphrase array) cipher-name digest-name input output
                              &key (kdf-iterations 10000) shared1 shared2)
   (let ((kdf-salt (make-array 32 :element-type '(unsigned-byte 8)))
-        (empty (make-array 0 :element-type '(unsigned-byte 8))))
+        (parameter (make-array 32 :element-type '(unsigned-byte 8))))
     (unless (= (read-sequence kdf-salt input) 32)
       (error "Input stream too short"))
-    (ies-decrypt-stream-common empty passphrase kdf-salt kdf-iterations cipher-name digest-name input output
+    (unless (= (read-sequence parameter input) 32)
+      (error "Input stream too short"))
+    (ies-decrypt-stream-common parameter passphrase kdf-salt kdf-iterations cipher-name digest-name input output
                                :shared1 shared1 :shared2 shared2)))

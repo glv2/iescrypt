@@ -20,7 +20,7 @@ Format of the encrypted file:
 
 Size of the fields:
 * salt: 32 bytes
-* parameter: 0 bytes in symmetric mode and 32 bytes in public key mode
+* parameter: 32 bytes
 * mac: 64 bytes
 
 Encryption process:
@@ -29,7 +29,8 @@ Encryption process:
 * The key and the initialization vector for the cipher and the key for the
 message authentication code are derived from a salt and a passphrase in
 symmetric mode, and from a salt, a parameter and an ECC key (curve25519) in
-public key mode (pbkdf2, 10000 iterations of blake2).
+public key mode (pbkdf2, 10000 iterations of blake2). The parameter is not
+used in symmetric mode, it just contains random data.
 
 
 ## Dependencies
@@ -59,11 +60,19 @@ To encrypt and decrypt a file in symmetric mode:
 
 To encrypt and decrypt a file in public key mode:
 
-    (clcrypt:make-key-pair "key")
+    (clcrypt:make-encryption-key-pair "key")
     (let ((pubkey (clcrypt:read-public-key "key.pub")
           (privkey (clcrypt:read-private-key "key"))))
       (clcrypt:encrypt-file "clear.file" "cipher.file" :public-key pubkey)
       (clcrypt:decrypt-file "cipher.file" "clear.file" :private-key privkey))
+
+To sign and verify a file:
+
+    (clcrypt:make-signing-key-pair "key")
+    (let ((pubkey (clcrypt:read-public-key "key.pub")
+          (privkey (clcrypt:read-private-key "key"))))
+      (clcrypt:sign-file "some.file" "some.file.sig" "key")
+      (clcrypt:verify-file-signature "some.file" "some.file.sig" "key.pub"))
 
 To start the GUI:
 
