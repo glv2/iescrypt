@@ -22,6 +22,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defpackage clcrypt
   (:use cl)
+  (:import-from archive
+                create-entry-from-pathname
+                do-archive-entries
+                entry-regular-file-p
+                entry-stream
+                finalize-archive
+                name
+                with-open-archive
+                write-entry-to-archive)
+  (:import-from babel
+                string-to-octets)
   (:import-from ironclad
                 byte-array-to-hex-string
                 curve25519-key-x
@@ -36,15 +47,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 make-public-key
                 sign-message
                 verify-signature)
-  (:import-from babel
-                string-to-octets)
-  (:export encrypt-file
+  (:import-from uiop
+                copy-stream-to-stream)
+  (:export decrypt-and-verify-file-signature
            decrypt-file
-           sign-file
-           verify-file-signature
+           encrypt-file
+           main
            make-encryption-key-pair
            make-signature-key-pair
-           read-public-key
-           read-private-key
            read-passphrase
-           main))
+           read-private-key
+           read-public-key
+           sign-and-encrypt-file
+           sign-file
+           verify-file-signature))
