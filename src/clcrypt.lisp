@@ -58,15 +58,38 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       (error "Private key too short."))
     private-key))
 
+(defun create-tar-file (pathname filelist)
+  (with-open-archive (archive pathname
+                              :direction :output)
+    (dolist (file filelist (finalize-archive archive))
+      (let ((entry (create-entry-from-pathname archive file)))
+        (write-entry-to-archive archive entry)))))
+
+(defun extract-tar-file (pathname)
+  (let ((files '()))
+    (with-open-archive (archive pathname :direction :input)
+      (do-archive-entries (entry archive)
+        (when (entry-regular-file-p entry)
+          (let ((input (entry-stream entry))
+                (filename (name entry)))
+            (with-open-file (output filename
+                                    :direction :output
+                                    :element-type '(unsigned-byte 8))
+              (do* ((buffer (make-array 32768 :element-type '(unsigned-byte 8)))
+                    (length (read-sequence buffer input)
+                            (read-sequence buffer input)))
+                   ((zerop length))
+                (write-sequence buffer output :end length))
+              (push filename files))))))
+    files))
+
 (defun make-encryption-key-pair (filename)
   (with-open-file (file-skey filename
                              :direction :output
-                             :element-type '(unsigned-byte 8)
-                             :if-exists :supersede)
+                             :element-type '(unsigned-byte 8))
     (with-open-file (file-pkey (concatenate 'string filename ".pub")
                                :direction :output
-                               :element-type '(unsigned-byte 8)
-                               :if-exists :supersede)
+                               :element-type '(unsigned-byte 8))
       (multiple-value-bind (skey pkey) (generate-key-pair :curve25519)
         (write-sequence (curve25519-key-x skey) file-skey)
         (write-sequence (curve25519-key-y pkey) file-pkey)))))
@@ -74,12 +97,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defun make-signing-key-pair (filename)
   (with-open-file (file-skey filename
                              :direction :output
-                             :element-type '(unsigned-byte 8)
-                             :if-exists :supersede)
+                             :element-type '(unsigned-byte 8))
     (with-open-file (file-pkey (concatenate 'string filename ".pub")
                                :direction :output
-                               :element-type '(unsigned-byte 8)
-                               :if-exists :supersede)
+                               :element-type '(unsigned-byte 8))
       (multiple-value-bind (skey pkey) (generate-key-pair :ed25519)
         (write-sequence (ed25519-key-x skey) file-skey)
         (write-sequence (ed25519-key-y pkey) file-pkey)))))
@@ -90,8 +111,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                          :element-type '(unsigned-byte 8))
     (with-open-file (output output-filename
                             :direction :output
-                            :element-type '(unsigned-byte 8)
-                            :if-exists :supersede)
+                            :element-type '(unsigned-byte 8))
       (cond (passphrase
              (ies-encrypt-stream (string-to-octets passphrase :encoding :utf-8)
                                  +cipher+
@@ -115,8 +135,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                          :element-type '(unsigned-byte 8))
     (with-open-file (output output-filename
                             :direction :output
-                            :element-type '(unsigned-byte 8)
-                            :if-exists :supersede)
+                            :element-type '(unsigned-byte 8))
       (cond (passphrase
              (ies-decrypt-stream (string-to-octets passphrase :encoding :utf-8)
                                  +cipher+
@@ -142,8 +161,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
          (signature (sign-message private-key hash)))
     (with-open-file (file-sig signature-filename
                               :direction :output
-                              :element-type '(unsigned-byte 8)
-                              :if-exists :supersede)
+                              :element-type '(unsigned-byte 8))
       (write-sequence pk file-sig)
       (write-sequence signature file-sig))))
 
@@ -160,32 +178,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                (verify-signature public-key hash signature))
           pk
           (error "Bad signature.")))))
-
-(defun create-tar-file (pathname filelist)
-  (with-open-archive (archive pathname
-                              :direction :output
-                              :if-exists :supersede)
-    (dolist (file filelist (finalize-archive archive))
-      (let ((entry (create-entry-from-pathname archive file)))
-        (write-entry-to-archive archive entry)))))
-
-(defun extract-tar-file (pathname)
-  (let ((files '()))
-    (with-open-archive (archive pathname :direction :input)
-      (do-archive-entries (entry archive)
-        (when (entry-regular-file-p entry)
-          (let ((input (entry-stream entry))
-                (filename (name entry)))
-            (with-open-file (output filename
-                                    :direction :output
-                                    :element-type '(unsigned-byte 8))
-              (do* ((buffer (make-array 32768 :element-type '(unsigned-byte 8)))
-                    (length (read-sequence buffer input)
-                            (read-sequence buffer input)))
-                   ((zerop length))
-                (write-sequence buffer output :end length))
-              (push filename files))))))
-    files))
   
 (defun sign-and-encrypt-file (input-filename output-filename signature-private-key &key passphrase public-key)
   (let ((signature-filename (concatenate 'string input-filename ".sig"))
@@ -268,7 +260,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (handler-case
       ;; Check arguments
       (cond
-        ((and (or (= (length argv) 4) (= (length argv) 5))
+        ((and (<= 4 (length argv) 5)
               (string= (elt argv 1) "penc"))
          ;; Encrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
@@ -281,7 +273,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase t))))
            (encrypt-file input-filename output-filename :passphrase passphrase)))
 
-        ((and (or (= (length argv) 4) (= (length argv) 5))
+        ((and (<= 4 (length argv) 5)
               (string= (elt argv 1) "pdec"))
          ;; Decrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
@@ -332,7 +324,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                (key-filename (elt argv 4)))
            (sign-file input-filename signature-filename key-filename)))
 
-        ((and (or (= (length argv) 4) (= (length argv) 5))
+        ((and (<= 4 (length argv) 5)
               (string= (elt argv 1) "verif"))
          ;; Verify a signature
          (let* ((input-filename (elt argv 2))
@@ -354,7 +346,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 (enc-key-filename (read-public-key (elt argv 5))))
            (sign-and-encrypt-file input-filename output-filename sig-key-filename :public-key enc-key-filename)))
 
-        ((and (or (= (length argv) 5) (= (length argv) 6))
+        ((and (<= 5 (length argv) 6)
               (string= (elt argv 1) "sign-penc"))
          ;; Sign and encrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
@@ -368,7 +360,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase t))))
            (sign-and-encrypt-file input-filename output-filename sig-key-filename :passphrase passphrase)))
 
-        ((and (or (= (length argv) 4) (= (length argv) 5))
+        ((and (<= 4 (length argv) 5)
               (string= (elt argv 1) "dec-verif"))
          ;; Decrypt and verify a file
          (let* ((input-filename (elt argv 2))
@@ -383,7 +375,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
              (let ((signer (byte-array-to-hex-string pk)))
                (format t "Valid signature from ~a.~%" signer)))))
 
-        ((and (or (= (length argv) 3) (= (length argv) 4) (= (length argv) 5))
+        ((and (<= 3 (length argv) 5)
               (string= (elt argv 1) "pdec-verif"))
          ;; Decrypt and verify a file
          (let* ((input-filename (elt argv 2))
@@ -397,7 +389,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                         (elt argv 4)
                                         nil))
                 (pk (decrypt-and-verify-file-signature input-filename
-                                                       :passphrase dec-key-filename
+                                                       :passphrase passphrase
                                                        :signature-public-key verif-key-filename)))
            (when pk
              (let ((signer (byte-array-to-hex-string pk)))

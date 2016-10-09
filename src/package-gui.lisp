@@ -22,19 +22,31 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defpackage clcrypt
   (:use cl :qt)
-  (:import-from ironclad
-                ies-encrypt-stream
-                ies-decrypt-stream
-                digest-file
-                sign-message
-                verify-signature
-                generate-key-pair
-                make-public-key
-                make-private-key
-                curve25519-key-x
-                curve25519-key-y
-                ed25519-key-x
-                ed25519-key-y)
+  (:import-from archive
+                create-entry-from-pathname
+                do-archive-entries
+                entry-regular-file-p
+                entry-stream
+                finalize-archive
+                name
+                with-open-archive
+                write-entry-to-archive)
   (:import-from babel
                 string-to-octets)
+  (:import-from ironclad
+                byte-array-to-hex-string
+                curve25519-key-x
+                curve25519-key-y
+                digest-file
+                ed25519-key-x
+                ed25519-key-y
+                generate-key-pair
+                ies-decrypt-stream
+                ies-encrypt-stream
+                make-private-key
+                make-public-key
+                sign-message
+                verify-signature)
+  (:import-from uiop
+                copy-stream-to-stream)
   (:export gui))

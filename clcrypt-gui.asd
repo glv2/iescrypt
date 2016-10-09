@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :version "1.0"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
-  :depends-on (babel ironclad qt)
+  :depends-on (archive babel ironclad qt uiop)
   :components ((:module "src"
                 :components ((:file "clcrypt" :depends-on ("package-gui"))
                              (:file "gui" :depends-on ("clcrypt" "package-gui"))
