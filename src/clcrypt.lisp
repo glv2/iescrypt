@@ -137,24 +137,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defun sign-file (input-filename signature-filename private-key-filename)
   (let* ((sk (read-private-key private-key-filename))
          (private-key (make-private-key :ed25519 :x sk))
+         (pk (ed25519-key-y private-key))
          (hash (digest-file +digest+ input-filename))
          (signature (sign-message private-key hash)))
     (with-open-file (file-sig signature-filename
                               :direction :output
                               :element-type '(unsigned-byte 8)
                               :if-exists :supersede)
+      (write-sequence pk file-sig)
       (write-sequence signature file-sig))))
 
 (defun verify-file-signature (input-filename signature-file public-key-filename)
-  (let* ((pk (read-public-key public-key-filename))
-         (public-key (make-public-key :ed25519 :y pk))
-         (hash (digest-file +digest+ input-filename))
-         (signature (read-file signature-file)))
-    (unless (= (length signature) 64)
+  (let ((data (read-file signature-file)))
+    (unless (= (length data) 96)
       (error "Bad signature length."))
-    (unless (verify-signature public-key hash signature)
-      (error "Bad signature."))
-    t))
+    (let* ((pk (subseq data 0 32))
+           (public-key (make-public-key :ed25519 :y pk))
+           (signature (subseq data 32 96))
+           (hash (digest-file +digest+ input-filename)))
+      (if (and (or (null public-key-filename)
+                   (equalp pk (read-public-key public-key-filename)))
+               (verify-signature public-key hash signature))
+          pk
+          (error "Bad signature.")))))
 
 (defmacro with-raw-io ((&key (vmin 1) (vtime 0)) &body body)
   "Execute BODY without echoing input IO actions."
@@ -205,7 +210,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   (handler-case
       ;; Check arguments
       (cond
-        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "penc"))
+        ((and (or (= (length argv) 4) (= (length argv) 5))
+              (string= (elt argv 1) "penc"))
          ;; Encrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -217,7 +223,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase t))))
            (encrypt-file input-filename output-filename :passphrase passphrase)))
 
-        ((and (or (= (length argv) 4) (= (length argv) 5)) (string= (elt argv 1) "pdec"))
+        ((and (or (= (length argv) 4) (= (length argv) 5))
+              (string= (elt argv 1) "pdec"))
          ;; Decrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -229,7 +236,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase nil))))
            (decrypt-file input-filename output-filename :passphrase passphrase)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "enc"))
+        ((and (= (length argv) 5)
+              (string= (elt argv 1) "enc"))
          ;; Encrypt a file using a public key
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -237,7 +245,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 (public-key (read-public-key key-filename)))
            (encrypt-file input-filename output-filename :public-key public-key)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "dec"))
+        ((and (= (length argv) 5)
+              (string= (elt argv 1) "dec"))
          ;; Decrypt a file using a private key
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
@@ -245,27 +254,35 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 (private-key (read-private-key key-filename)))
            (decrypt-file input-filename output-filename :private-key private-key)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "sign"))
+        ((and (= (length argv) 5)
+              (string= (elt argv 1) "sign"))
          ;; Sign a file
          (let ((input-filename (elt argv 2))
                (signature-filename (elt argv 3))
                (key-filename (elt argv 4)))
            (sign-file input-filename signature-filename key-filename)))
 
-        ((and (= (length argv) 5) (string= (elt argv 1) "verif"))
+        ((and (or (= (length argv) 4) (= (length argv) 5))
+              (string= (elt argv 1) "verif"))
          ;; Verify a signature
-         (let ((input-filename (elt argv 2))
-               (signature-filename (elt argv 3))
-               (key-filename (elt argv 4)))
-           (if (verify-file-signature input-filename signature-filename key-filename)
-               (format t "Signature OK.~%"))))
+         (let* ((input-filename (elt argv 2))
+                (signature-filename (elt argv 3))
+                (key-filename (if (= (length argv) 5)
+                                  (elt argv 4)
+                                  nil))
+                (pk (verify-file-signature input-filename signature-filename key-filename)))
+           (when pk
+             (let ((signer (byte-array-to-hex-string pk)))
+               (format t "Valid signature from ~a.~%" signer)))))
 
-        ((and (= (length argv) 3) (string= (elt argv 1) "gen-enc"))
+        ((and (= (length argv) 3)
+              (string= (elt argv 1) "gen-enc"))
          ;; Generate an encryption key pair
          (let ((key-filename (elt argv 2)))
            (make-encryption-key-pair key-filename)))
 
-        ((and (= (length argv) 3) (string= (elt argv 1) "gen-sig"))
+        ((and (= (length argv) 3)
+              (string= (elt argv 1) "gen-sig"))
          ;; Generate a signature key pair
          (let ((key-filename (elt argv 2)))
            (make-signing-key-pair key-filename)))
@@ -293,7 +310,7 @@ Commands:
   sign <input file> <signature file> <private key file>
     Create a signature of a file.
 
-  verif <input-file> <signature-file> <public key file>
+  verif <input-file> <signature-file> [public key file]
     Verify a signature of a file.
 
   gen-enc <file name>
