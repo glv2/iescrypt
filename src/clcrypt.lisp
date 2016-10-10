@@ -350,7 +350,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
          ;; Sign and encrypt a file using a passphrase
          (let* ((input-filename (elt argv 2))
                 (output-filename (elt argv 3))
-                (sig-key-filename (elt argv 4))
+                (sig-key-filename (read-private-key (elt argv 4)))
                 (passphrase (if (= (length argv) 6)
                                 (read-passphrase (elt argv 5))
                                 (get-passphrase t))))

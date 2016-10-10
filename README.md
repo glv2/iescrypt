@@ -24,7 +24,7 @@ Size of the fields:
 * mac: 64 bytes
 
 Encryption process:
-* The cleartext is encrypted by the cipher (chacha) in counter mode.
+* The cleartext is encrypted by the cipher (chacha).
 * The mac (hmac using blake2) is computed on the ciphertext.
 * The key and the initialization vector for the cipher and the key for the
 message authentication code are derived from a salt and a passphrase in
