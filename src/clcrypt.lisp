@@ -26,7 +26,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 (defconstant +cipher+ :chacha)
 (defconstant +digest+ :blake2)
 (defconstant +kdf-iterations+ 10000)
+(setf *random-state* (make-random-state t))
 
+
+(defun get-temporary-filename (&optional (suffix ""))
+  (let* ((id (random 1000000000))
+         (filename (format nil "tmp-~d~a" id suffix)))
+    (if (file-exists-p filename)
+        (get-temporary-filename)
+        filename)))
 
 (defun read-file (filename)
   (with-open-file (file filename
@@ -57,31 +65,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (unless (= (length private-key) 32)
       (error "Private key too short."))
     private-key))
-
-(defun create-tar-file (pathname filelist)
-  (with-open-archive (archive pathname
-                              :direction :output)
-    (dolist (file filelist (finalize-archive archive))
-      (let ((entry (create-entry-from-pathname archive file)))
-        (write-entry-to-archive archive entry)))))
-
-(defun extract-tar-file (pathname)
-  (let ((files '()))
-    (with-open-archive (archive pathname :direction :input)
-      (do-archive-entries (entry archive)
-        (when (entry-regular-file-p entry)
-          (let ((input (entry-stream entry))
-                (filename (name entry)))
-            (with-open-file (output filename
-                                    :direction :output
-                                    :element-type '(unsigned-byte 8))
-              (do* ((buffer (make-array 32768 :element-type '(unsigned-byte 8)))
-                    (length (read-sequence buffer input)
-                            (read-sequence buffer input)))
-                   ((zerop length))
-                (write-sequence buffer output :end length))
-              (push filename files))))))
-    files))
 
 (defun make-encryption-key-pair (filename)
   (with-open-file (file-skey filename
@@ -153,62 +136,103 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             (t
              (error "Passphrase or private key must be specified."))))))
 
-(defun sign-file (input-filename signature-filename private-key)
+(defun sign-file (input-filename private-key &optional signature-filename)
   (let* ((privkey (make-private-key :ed25519 :x private-key))
          (public-key (ed25519-key-y privkey))
          (hash (digest-file +digest+ input-filename))
-         (signature (sign-message privkey hash)))
-    (with-open-file (file-sig signature-filename
-                              :direction :output
-                              :element-type '(unsigned-byte 8))
-      (write-sequence public-key file-sig)
-      (write-sequence signature file-sig))))
+         (signature (concatenate '(simple-array (unsigned-byte 8) (*))
+                                 public-key
+                                 (sign-message privkey hash))))
+    (when signature-filename
+      (with-open-file (signature-file signature-filename
+                                      :direction :output
+                                      :element-type '(unsigned-byte 8))
+        (write-sequence signature signature-file)))
+    signature))
 
-(defun verify-file-signature (input-filename signature-filename &optional public-key)
-  (let ((data (read-file signature-filename)))
-    (unless (= (length data) 96)
-      (error "Bad signature length."))
-    (let* ((signature-public-key (subseq data 0 32))
-           (pubkey (make-public-key :ed25519 :y signature-public-key))
-           (signature (subseq data 32 96))
-           (hash (digest-file +digest+ input-filename)))
-      (if (and (or (null public-key)
-                   (equalp signature-public-key public-key))
-               (verify-signature pubkey hash signature))
-          signature-public-key
-          (error "Bad signature.")))))
+(defun verify-file-signature (input-filename signature &optional public-key)
+  (unless (= (length signature) 96)
+    (error "Bad signature length."))
+  (let* ((signature-public-key (subseq signature 0 32))
+         (pubkey (make-public-key :ed25519 :y signature-public-key))
+         (signature (subseq signature 32 96))
+         (hash (digest-file +digest+ input-filename)))
+    (if (and (or (null public-key)
+                 (equalp signature-public-key public-key))
+             (verify-signature pubkey hash signature))
+        signature-public-key
+        (error "Bad signature."))))
 
 (defun sign-and-encrypt-file (input-filename output-filename signature-private-key &key passphrase public-key)
   (let ((signature-filename (concatenate 'string input-filename ".sig"))
-        (archive-filename (concatenate 'string input-filename ".tar")))
-    (sign-file input-filename signature-filename signature-private-key)
-    (create-tar-file archive-filename (list input-filename signature-filename))
-    (cond (passphrase
-           (encrypt-file archive-filename output-filename :passphrase passphrase))
-          (public-key
-           (encrypt-file archive-filename output-filename :public-key public-key))
-          (t
-           (error "Passphrase or encryption public key must be specified.")))
-    (delete-file signature-filename)
-    (delete-file archive-filename)))
+        (archive-filename (get-temporary-filename ".tar")))
+    (unwind-protect
+         (progn
+           (sign-file input-filename signature-private-key signature-filename)
+           (with-open-archive (archive archive-filename :direction :output)
+             (flet ((make-entry (archive filename)
+                      (let ((entry (create-entry-from-pathname archive filename)))
+                        (write-entry-to-archive archive entry))))
+               (make-entry archive input-filename)
+               (make-entry archive signature-filename))
+             (finalize-archive archive))
+           (cond (passphrase
+                  (encrypt-file archive-filename output-filename :passphrase passphrase))
+                 (public-key
+                  (encrypt-file archive-filename output-filename :public-key public-key))
+                 (t
+                  (error "Passphrase or encryption public key must be specified."))))
+      (when (file-exists-p signature-filename)
+        (delete-file signature-filename))
+      (when (file-exists-p archive-filename)
+        (delete-file archive-filename)))))
 
-(defun decrypt-and-verify-file-signature (input-filename &optional signature-public-key &key passphrase private-key)
-  (let ((archive-filename (concatenate 'string input-filename ".tar")))
-    (cond
-      (passphrase
-       (decrypt-file input-filename archive-filename :passphrase passphrase))
-      (private-key
-       (decrypt-file input-filename archive-filename :private-key private-key))
-      (t
-       (error "Passphrase or private key must be specified.")))
-    (let ((files (extract-tar-file archive-filename)))
-      (delete-file archive-filename)
-      (unless (= (length files) 2)
-        (error "Decrypted file is in wrong format."))
-      (destructuring-bind (data-filename signature-filename) files
-        (when (> (length data-filename) (length signature-filename))
-          (rotatef data-filename signature-filename))
-        (verify-file-signature data-filename signature-filename signature-public-key)))))
+(defun decrypt-and-verify-file-signature (input-filename output-filename signature-public-key &key passphrase private-key)
+  (let ((signature-filename (get-temporary-filename ".sig"))
+        (archive-filename (get-temporary-filename ".tar")))
+    (unwind-protect
+         (progn
+           (cond
+             (passphrase
+              (decrypt-file input-filename archive-filename :passphrase passphrase))
+             (private-key
+              (decrypt-file input-filename archive-filename :private-key private-key))
+             (t
+              (error "Passphrase or private key must be specified.")))
+           (let (entries)
+             (with-open-archive (archive archive-filename :direction :input)
+               (do-archive-entries (entry archive)
+                 (when (entry-regular-file-p entry)
+                   (push (name entry) entries))))
+             (unless (= (length entries) 2)
+               (error "Unknown decrypted file format."))
+             (let ((data-name (first entries))
+                   (signature-name (second entries)))
+               ;; Name of signature file "foo.sig" is always longer than name of data file "foo"
+               (when (> (length data-name) (length signature-name))
+                 (rotatef data-name signature-name))
+               (flet ((write-file (stream filename)
+                        (with-open-file (output filename
+                                                :direction :output
+                                                :element-type '(unsigned-byte 8))
+                          (do* ((buffer (make-array 32768 :element-type '(unsigned-byte 8)))
+                                (length (read-sequence buffer stream)
+                                        (read-sequence buffer stream)))
+                               ((zerop length))
+                            (write-sequence buffer output :end length)))))
+                 (with-open-archive (archive archive-filename :direction :input)
+                   (do-archive-entries (entry archive)
+                     (when (entry-regular-file-p entry)
+                       (cond ((string= (name entry) data-name)
+                              (write-file (entry-stream entry) output-filename))
+                             ((string= (name entry) signature-name)
+                              (write-file (entry-stream entry) signature-filename)))))))))
+           (let ((signature (read-file signature-filename)))
+             (verify-file-signature output-filename signature signature-public-key)))
+      (when (file-exists-p signature-filename)
+        (delete-file signature-filename))
+      (when (file-exists-p archive-filename)
+        (delete-file archive-filename)))))
 
 (defmacro with-raw-io ((&key (vmin 1) (vtime 0)) &body body)
   "Execute BODY without echoing input IO actions."
@@ -322,16 +346,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 (signature-filename (elt argv 3))
                 (key-filename (elt argv 4))
                 (private-key (read-private-key key-filename)))
-           (sign-file input-filename signature-filename private-key)))
+           (sign-file input-filename private-key signature-filename)))
 
         ((and (<= 4 (length argv) 5)
               (string= (elt argv 1) "verif"))
          ;; Verify a signature
          (let* ((input-filename (elt argv 2))
-                (signature-filename (elt argv 3))
+                (signature (read-file (elt argv 3)))
                 (public-key (when (= (length argv) 5)
                               (read-public-key (elt argv 4))))
-                (signature-public-key (verify-file-signature input-filename signature-filename public-key)))
+                (signature-public-key (verify-file-signature input-filename signature public-key)))
            (when signature-public-key
              (let ((signer (byte-array-to-hex-string signature-public-key)))
                (format t "Valid signature from ~a.~%" signer)))))
@@ -356,28 +380,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                 (get-passphrase t))))
            (sign-and-encrypt-file input-filename output-filename sig-key-filename :passphrase passphrase)))
 
-        ((and (<= 4 (length argv) 5)
+        ((and (<= 5 (length argv) 6)
               (string= (elt argv 1) "dec-verif"))
          ;; Decrypt and verify a file
          (let* ((input-filename (elt argv 2))
-                (encryption-private-key (read-private-key (elt argv 3)))
-                (public-key (when (= (length argv) 5)
-                              (read-public-key (elt argv 4))))
-                (signature-public-key (decrypt-and-verify-file-signature input-filename public-key :private-key encryption-private-key)))
+                (output-filename (elt argv 3))
+                (encryption-private-key (read-private-key (elt argv 4)))
+                (public-key (when (= (length argv) 6)
+                              (read-public-key (elt argv 5))))
+                (signature-public-key (decrypt-and-verify-file-signature input-filename output-filename public-key :private-key encryption-private-key)))
            (when signature-public-key
              (let ((signer (byte-array-to-hex-string signature-public-key)))
                (format t "Valid signature from ~a.~%" signer)))))
 
-        ((and (<= 3 (length argv) 5)
+        ((and (<= 4 (length argv) 6)
               (string= (elt argv 1) "pdec-verif"))
          ;; Decrypt and verify a file
          (let* ((input-filename (elt argv 2))
-                (passphrase (if (>= (length argv) 4)
-                                (read-passphrase (elt argv 3))
+                (output-filename (elt argv 3))
+                (passphrase (if (>= (length argv) 5)
+                                (read-passphrase (elt argv 4))
                                 (get-passphrase nil)))
-                (public-key (when (= (length argv) 5)
-                              (read-public-key (elt argv 4))))
-                (signature-public-key (decrypt-and-verify-file-signature input-filename public-key :passphrase passphrase)))
+                (public-key (when (= (length argv) 6)
+                              (read-public-key (elt argv 5))))
+                (signature-public-key (decrypt-and-verify-file-signature input-filename output-filename public-key :passphrase passphrase)))
            (when signature-public-key
              (let ((signer (byte-array-to-hex-string signature-public-key)))
                (format t "Valid signature from ~a.~%" signer)))))
@@ -420,8 +446,8 @@ Commands:
   sign-penc <input file> <output file> <signature private key file> [passphrase file]
     Sign and encrypt a file.
 
-  dec-verif <input file> <decryption private key file> [signature public key file]
-  pdec-verif <input file> [passphrase file [signature public key file]]
+  dec-verif <input file> <output file> <decryption private key file> [signature public key file]
+  pdec-verif <input file> <output file> [passphrase file [signature public key file]]
     Decrypt and verify a file.~%"))))
 
     (t (err) (format *error-output* "Error: ~a~%" err))))

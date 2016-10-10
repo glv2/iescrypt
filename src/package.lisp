@@ -48,7 +48,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 sign-message
                 verify-signature)
   (:import-from uiop
-                copy-stream-to-stream)
+                copy-stream-to-stream
+                file-exists-p)
   (:export decrypt-and-verify-file-signature
            decrypt-file
            encrypt-file
