@@ -1,41 +1,41 @@
 #DESTDIR = /usr/local
 
-all: clcrypt clcrypt-gui
+all: iescrypt iescrypt-gui
 
-clcrypt: clcrypt.asd src/ies.lisp src/package.lisp src/clcrypt.lisp
+iescrypt: iescrypt.asd src/ies.lisp src/package.lisp src/iescrypt.lisp
 	sbcl \
 		--no-userinit \
 		--no-sysinit \
 		--non-interactive \
 		--load ~/.quicklisp/setup.lisp \
-		--eval '(ql:quickload :clcrypt)' \
+		--eval '(ql:quickload :iescrypt)' \
 		--eval '(ql:write-asdf-manifest-file "asdf-manifest.txt" :if-exists :supersede)' \
 		--eval '(quit)'
 	buildapp \
 		--manifest-file "asdf-manifest.txt" \
-		--load-system "clcrypt" \
-		--output "clcrypt" \
-		--entry "clcrypt:main" \
+		--load-system "iescrypt" \
+		--output "iescrypt" \
+		--entry "iescrypt:main" \
 		--compress-core
 
-clcrypt-gui: clcrypt-gui.asd src/ies.lisp src/package-gui.lisp src/clcrypt.lisp src/gui.lisp
+iescrypt-gui: iescrypt-gui.asd src/ies.lisp src/package-gui.lisp src/iescrypt.lisp src/gui.lisp
 	sbcl \
 		--no-userinit \
 		--no-sysinit \
 		--non-interactive \
 		--load ~/.quicklisp/setup.lisp \
-		--eval '(ql:quickload :clcrypt-gui)' \
+		--eval '(ql:quickload :iescrypt-gui)' \
 		--eval '(ql:write-asdf-manifest-file "asdf-manifest.txt" :if-exists :supersede)' \
 		--eval '(quit)'
 	buildapp \
 		--manifest-file "asdf-manifest.txt" \
-		--load-system "clcrypt-gui" \
-		--output "clcrypt-gui" \
-		--entry "clcrypt:gui" \
+		--load-system "iescrypt-gui" \
+		--output "iescrypt-gui" \
+		--entry "iescrypt-gui:gui" \
 		--compress-core
 
-#install: clcrypt
-#	install -m 755 clcrypt ${DESTDIR}/bin/clcrypt
+#install: iescrypt
+#	install -m 755 iescrypt ${DESTDIR}/bin/iescrypt
 
 clean:
-	rm -f clcrypt clcrypt-gui
+	rm -f iescrypt iescrypt-gui

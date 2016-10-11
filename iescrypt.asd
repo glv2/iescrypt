@@ -1,6 +1,8 @@
 ;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
 
 #|
+This file is part of iescrypt, a program for encrypting, decrypting
+and signing files.
 
 Copyright 2015 Guillaume LE VAILLANT
 
@@ -16,18 +18,17 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 |#
 
 
-(defsystem clcrypt
-  :name clcrypt
+(defsystem iescrypt
+  :name iescrypt
   :description "Tool to encrypt and decrypt files"
   :version "1.0"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
   :depends-on (archive babel ironclad uiop)
   :components ((:module "src"
-                :components ((:file "clcrypt" :depends-on ("package"))
+                :components ((:file "iescrypt" :depends-on ("package"))
                              (:file "ies")
                              (:file "package" :depends-on ("ies"))))))

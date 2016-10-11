@@ -1,6 +1,8 @@
 ;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
 
 #|
+This file is part of iescrypt, a program for encrypting, decrypting
+and signing files.
 
 Copyright 2015-2016 Guillaume LE VAILLANT
 
@@ -16,11 +18,10 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 |#
 
 
-(defpackage clcrypt
+(defpackage iescrypt
   (:use cl)
   (:import-from archive
                 create-entry-from-pathname
@@ -59,6 +60,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
            read-passphrase
            read-private-key
            read-public-key
+           read-signature
            sign-and-encrypt-file
            sign-file
            verify-file-signature))

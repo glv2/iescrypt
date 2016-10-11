@@ -1,8 +1,10 @@
 ;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
 
 #|
+This file is part of iescrypt, a program for encrypting, decrypting
+and signing files.
 
-Copyright 2015 Guillaume LE VAILLANT
+Copyright 2015-2016 Guillaume LE VAILLANT
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,11 +18,10 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 |#
 
 
-(in-package clcrypt)
+(in-package iescrypt-gui)
 
 
 (named-readtables:in-readtable :qt)
@@ -116,12 +117,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (#_exec passphrase-dialog)
     (setf passphrase (passphrase instance))
     (when passphrase
-      (#_setWindowTitle instance "clcrypt - encrypting...")
+      (#_setWindowTitle instance "iescrypt - encrypting...")
       (#_repaint instance)
       (handler-case
           (encrypt-file input-file output-file :passphrase passphrase)
         (t (err) (setf error (format nil "~a" err))))
-      (#_setWindowTitle instance "clcrypt")
+      (#_setWindowTitle instance "iescrypt")
       (#_repaint instance)
       (let ((msgbox (#_new QMessageBox instance)))
         (if error
@@ -148,12 +149,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (#_exec passphrase-dialog)
     (setf passphrase (passphrase instance))
     (when passphrase
-      (#_setWindowTitle instance "clcrypt - decrypting...")
+      (#_setWindowTitle instance "iescrypt - decrypting...")
       (#_repaint instance)
       (handler-case
           (decrypt-file input-file output-file :passphrase passphrase)
         (t (err) (setf error (format nil "~a" err))))
-      (#_setWindowTitle instance "clcrypt")
+      (#_setWindowTitle instance "iescrypt")
       (#_repaint instance)
       (let ((msgbox (#_new QMessageBox instance)))
         (if error
@@ -188,7 +189,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     (connect encrypt-button "clicked()" instance "encrypt()")
     (connect decrypt-button "clicked()" instance "decrypt()")
 
-    (#_setWindowTitle instance "clcrypt")
+    (#_setWindowTitle instance "iescrypt")
     (#_addWidget layout-linedits (#_new QLabel "Input file:") 0 0)
     (#_addWidget layout-linedits (input-file instance) 0 1)
     (#_addWidget layout-linedits browse-in-button 0 2)
@@ -219,5 +220,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defun gui (&rest args)
   (declare (ignore args))
-  (mk-qapplication "clcrypt")
+  (mk-qapplication "iescrypt")
   (with-main-window (window (make-instance 'main-window))))

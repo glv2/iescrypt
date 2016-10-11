@@ -1,6 +1,8 @@
 ;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
 
 #|
+This file is part of iescrypt, a program for encrypting, decrypting
+and signing files.
 
 Copyright 2015-2016 Guillaume LE VAILLANT
 
@@ -16,17 +18,23 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 |#
 
 
 (in-package :ironclad)
 
 
+;;; Add the functions for the integrated encryption scheme
+;;; to the ironclad library.
+
 (defgeneric ies-encrypt-stream (public-key cipher-name digest-name input-stream output-stream
-                                &key kdf-iterations shared1 shared2))
+                                &key kdf-iterations shared1 shared2)
+  (:documentation "Write the result of the encryption of INPUT-STREAM to OUTPUT-STREAM.
+The encryption is done using the integrated encryption scheme."))
 (defgeneric ies-decrypt-stream (private-key cipher-name digest-name input-stream output-stream
-                                &key kdf-iterations shared1 shared2))
+                                &key kdf-iterations shared1 shared2)
+    (:documentation "Write the result of the decryption of INPUT-STREAM to OUTPUT-STREAM.
+The decryption is done using the integrated encryption scheme."))
 
 (defun ies-encrypt-stream-common (parameter shared-secret kdf-salt kdf-iterations cipher-name digest-name input output
                                   &key shared1 shared2)

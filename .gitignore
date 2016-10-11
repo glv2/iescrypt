@@ -1,6 +1,4 @@
 asdf-manifest.txt
-clcrypt
-clcrypt-gui
-clcrypt-nt
-clcrypt-gui-nt
+iescrypt
+iescrypt-gui
 test/
