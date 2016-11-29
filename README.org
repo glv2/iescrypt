@@ -1,0 +1,126 @@
+#+TITLE: iescrypt
+
+The iescrypt program can encrypt, decrypt and sign files.
+
+The encryption/decryption can be done either with a passphrase or
+a curve25519 key pair. The signature/verification is done with an
+ed25519 key pair.
+
+
+* Details
+
+Format of the encrypted file:
+
+#+BEGIN_EXAMPLE
++------+-----------+------------+-----+
+| salt | parameter | ciphertext | mac |
++------+-----------+------------+-----+
+#+END_EXAMPLE
+
+Size of the fields:
+- salt: 32 bytes
+- parameter: 32 bytes
+- mac: 64 bytes
+
+Encryption process:
+- The cleartext is encrypted by the cipher (chacha).
+- The mac (hmac using blake2) is computed on the ciphertext.
+- The key and the initialization vector for the cipher and the key for the message authentication code are derived either from a salt and a passphrase or from a salt, a parameter and an ECC (curve25519) key (pbkdf2, 10000 iterations of blake2). The parameter is not used in passphrase mode, it just contains random data.
+
+When using the command to simultaneously sign and encrypt a file, the
+encryption is done on a tar file containing the input file and the signature
+of the input file.
+
+
+* Dependencies
+
+- [[http://www.sbcl.org/][sbcl]] as Common Lisp implementation (it also works with ccl, ecl and clisp, but 200 times slower).
+- [[http://www.cliki.net/Archive][archive]]
+- [[http://www.cliki.net/Babel][babel]]
+- [[http://cliki.net/Ironclad][ironclad]]
+
+
+If you want to use the Qt GUI, you will also need:
+
+- [[http://common-lisp.net/project/commonqt][CommonQt]]
+
+If you want to build iescrypt as an executable using the Makefile, you will
+also need:
+
+- [[http://www.cliki.net/Buildapp][buildapp]]
+
+These libraries can be installed easily with [[http://www.quicklisp.org][quicklisp]].
+
+
+* Examples
+
+Encrypt and decrypt a file with a passphrase:
+
+#+BEGIN_SRC lisp
+(require 'iescrypt)
+(in-package iescrypt)
+(encrypt-file "clear.file" "cipher.file" :passphrase "passphrase")
+(decrypt-file "cipher.file" "clear.file" :passphrase "passphrase")
+#+END_SRC
+
+Encrypt and decrypt a file with a key pair:
+
+#+BEGIN_SRC lisp
+(make-encryption-key-pair "key")
+(let ((pubkey (read-public-key "key.pub")
+      (privkey (read-private-key "key"))))
+  (encrypt-file "clear.file" "cipher.file" :public-key pubkey)
+  (decrypt-file "cipher.file" "clear.file" :private-key privkey))
+#+END_SRC
+
+Sign and verify a file:
+
+#+BEGIN_SRC lisp
+(make-signing-key-pair "key")
+(let ((pubkey (read-public-key "key.pub")
+      (privkey (read-private-key "key"))))
+  (let ((signature (sign-file "some.file" "key" "some.file.sig")))
+    (verify-file-signature "some.file" signature))
+#+END_SRC
+
+Simultaneously sign and encrypt a file:
+
+#+BEGIN_SRC lisp
+(make-encryption-key-pair "enckey")
+(make-signing-key-pair "sigkey")
+(let ((encpubkey (read-public-key "enckey.pub"))
+      (encprivkey (read-private-key "enckey"))
+      (sigpubkey (read-public-key "sigkey.pub"))
+      (sigprivkey (read-private-key "sigkey")))
+  (sign-and-encrypt-file "clear.file" "cipher.file" sigkey :public-key enckey.pub)
+  (decrypt-and-verify-file "cipher.file" "clear.file" nil :private-key enckey))
+#+END_SRC
+
+Start the GUI:
+
+#+BEGIN_SRC lisp
+(require 'iescrypt-gui)
+(iescrypt:gui)
+#+END_SRC
+
+## Executable
+
+You can build executables using the Makefile (which uses buildapp).
+
+To build all the versions:
+
+#+BEGIN_SRC shell
+make
+#+END_SRC
+
+To build the console version:
+
+#+BEGIN_SRC shell
+make iescrypt
+#+END_SRC
+
+To build the GUI version:
+
+#+BEGIN_SRC shell
+make iescrypt-gui
+#+END_SRC
