@@ -4,7 +4,7 @@
 This file is part of iescrypt, a program for encrypting, decrypting
 and signing files.
 
-Copyright 2015-2016 Guillaume LE VAILLANT
+Copyright 2015-2017 Guillaume LE VAILLANT
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -190,7 +190,7 @@ the matching private key."
          (signature (subseq signature 32 96))
          (hash (digest-file +digest+ input-filename)))
     (if (and (or (null public-key)
-                 (equalp signature-public-key public-key))
+                 (constant-time-equal signature-public-key public-key))
              (verify-signature pubkey hash signature))
         signature-public-key
         (error "Bad signature."))))

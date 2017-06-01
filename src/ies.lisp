@@ -4,7 +4,7 @@
 This file is part of iescrypt, a program for encrypting, decrypting
 and signing files.
 
-Copyright 2015-2016 Guillaume LE VAILLANT
+Copyright 2015-2017 Guillaume LE VAILLANT
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,12 +29,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 (defgeneric ies-encrypt-stream (public-key cipher-name digest-name input-stream output-stream
                                 &key kdf-iterations shared1 shared2)
-  (:documentation "Write the result of the encryption of INPUT-STREAM to OUTPUT-STREAM.
-The encryption is done using the integrated encryption scheme."))
+  (:documentation "Write the result of the encryption of INPUT-STREAM
+to OUTPUT-STREAM. The encryption is done using the integrated
+encryption scheme."))
 (defgeneric ies-decrypt-stream (private-key cipher-name digest-name input-stream output-stream
                                 &key kdf-iterations shared1 shared2)
-    (:documentation "Write the result of the decryption of INPUT-STREAM to OUTPUT-STREAM.
-The decryption is done using the integrated encryption scheme."))
+    (:documentation "Write the result of the decryption of INPUT-STREAM
+to OUTPUT-STREAM. The decryption is done using the integrated
+encryption scheme."))
 
 (defun ies-encrypt-stream-common (parameter shared-secret kdf-salt kdf-iterations cipher-name digest-name input output
                                   &key shared1 shared2)
@@ -58,7 +60,7 @@ The decryption is done using the integrated encryption scheme."))
                                   :key enc-key
                                   :mode :ctr
                                   :initialization-vector iv)))
-         (mac (make-hmac mac-key digest-name)))
+         (mac (make-mac :hmac mac-key digest-name)))
     (write-sequence kdf-salt output)
     (write-sequence parameter output)
     (do* ((buffer (make-array 32768 :element-type '(unsigned-byte 8)))
@@ -66,11 +68,11 @@ The decryption is done using the integrated encryption scheme."))
                (read-sequence buffer input)))
          ((zerop len))
       (encrypt-in-place cipher buffer :end len)
-      (update-hmac mac buffer :end len)
+      (update-mac mac buffer :end len)
       (write-sequence buffer output :end len))
     (when shared2
-      (update-hmac mac shared2))
-    (write-sequence (hmac-digest mac) output))
+      (update-mac mac shared2))
+    (write-sequence (produce-mac mac) output))
   t)
 
 (defun ies-decrypt-stream-common (parameter shared-secret kdf-salt kdf-iterations cipher-name digest-name input output
@@ -96,7 +98,7 @@ The decryption is done using the integrated encryption scheme."))
                                   :key enc-key
                                   :mode :ctr
                                   :initialization-vector iv)))
-         (mac (make-hmac mac-key digest-name))
+         (mac (make-mac :hmac mac-key digest-name))
          (mac-length (digest-length digest-name))
          (buffer (make-array (+ 32768 mac-length) :element-type '(unsigned-byte 8))))
     (unless (= (read-sequence buffer input :end mac-length) mac-length)
@@ -104,13 +106,13 @@ The decryption is done using the integrated encryption scheme."))
     (do ((len (- (read-sequence buffer input :start mac-length) mac-length)
               (- (read-sequence buffer input :start mac-length) mac-length)))
         ((zerop len))
-      (update-hmac mac buffer :end len)
+      (update-mac mac buffer :end len)
       (decrypt-in-place cipher buffer :end len)
       (write-sequence buffer output :end len)
       (replace buffer buffer :end1 mac-length :start2 len))
     (when shared2
-      (update-hmac mac shared2))
-    (unless (equalp (hmac-digest mac) (subseq buffer 0 mac-length))
+      (update-mac mac shared2))
+    (unless (constant-time-equal (produce-mac mac) (subseq buffer 0 mac-length))
       (error "Invalid MAC")))
   t)
 
