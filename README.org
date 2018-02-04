@@ -31,7 +31,6 @@ When using the command to simultaneously sign and encrypt a file, the
 encryption is done on a tar file containing the input file and the signature
 of the input file.
 
-
 * Dependencies
 
 - [[http://www.sbcl.org/][sbcl]] as Common Lisp implementation (it also works with ccl, ecl and clisp, but 200 times slower).
@@ -39,18 +38,7 @@ of the input file.
 - [[http://www.cliki.net/Babel][babel]]
 - [[http://cliki.net/Ironclad][ironclad]]
 
-
-If you want to use the Qt GUI, you will also need:
-
-- [[http://common-lisp.net/project/commonqt][CommonQt]]
-
-If you want to build iescrypt as an executable using the Makefile, you will
-also need:
-
-- [[http://www.cliki.net/Buildapp][buildapp]]
-
 These libraries can be installed easily with [[http://www.quicklisp.org][quicklisp]].
-
 
 * Examples
 
@@ -96,31 +84,10 @@ Simultaneously sign and encrypt a file:
   (decrypt-and-verify-file "cipher.file" "clear.file" nil :private-key enckey))
 #+END_SRC
 
-Start the GUI:
-
-#+BEGIN_SRC lisp
-(require 'iescrypt-gui)
-(iescrypt:gui)
-#+END_SRC
-
 ## Executable
 
-You can build executables using the Makefile (which uses buildapp).
-
-To build all the versions:
+You can build executables using the Makefile.
 
 #+BEGIN_SRC shell
 make
-#+END_SRC
-
-To build the console version:
-
-#+BEGIN_SRC shell
-make iescrypt
-#+END_SRC
-
-To build the GUI version:
-
-#+BEGIN_SRC shell
-make iescrypt-gui
 #+END_SRC
