@@ -4,7 +4,7 @@
 This file is part of iescrypt, a program for encrypting, decrypting
 and signing files.
 
-Copyright 2015-2017 Guillaume LE VAILLANT
+Copyright 2015-2018 Guillaume LE VAILLANT
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,6 +21,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 |#
 
 
+(cl:in-package :asdf-user)
+
+;; Redefine 'program-op' to actvate compression
+#+sbcl
+(defmethod perform ((o program-op) (c system))
+  (uiop:dump-image (output-file o c) :executable t :compression t))
+
 (defsystem "iescrypt"
   :name "iescrypt"
   :description "Tool to encrypt and decrypt files"
@@ -28,6 +35,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
   :depends-on ("archive" "babel" "ironclad" "uiop")
+  :build-operation program-op
+  :build-pathname "iescrypt"
+  :entry-point "iescrypt:main"
   :components ((:module "src"
                 :components ((:file "iescrypt" :depends-on ("package"))
                              (:file "ies")
