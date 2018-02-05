@@ -1,10 +1,6 @@
 #+TITLE: iescrypt
 
-The iescrypt program is a tool to encrypt, decrypt and sign files.
-
-The encryption can use either a passphrase or a curve25519 key pair.
-The signature uses a ed25519 key pair.
-
+The *iescrypt* program is a tool to encrypt, decrypt and sign files.
 
 * Details
 ** Algorithms
@@ -15,7 +11,8 @@ parameters:
  - poly1305 for message authentication code
  - x25519 (curve25519) or passphrase and argon2i to derive keys
 
-The program can also sign files using eddsa (ed25519).
+The program can also sign files using eddsa (ed25519). The signature
+is made on the blake2 hash of the input file.
 
 ** File format
 
