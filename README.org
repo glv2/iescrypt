@@ -1,39 +1,63 @@
 #+TITLE: iescrypt
 
-The iescrypt program can encrypt, decrypt and sign files.
+The iescrypt program is a tool to encrypt, decrypt and sign files.
 
-The encryption/decryption can be done either with a passphrase or
-a curve25519 key pair. The signature/verification is done with an
-ed25519 key pair.
+The encryption can use either a passphrase or a curve25519 key pair.
+The signature uses a ed25519 key pair.
 
 
 * Details
+** Algorithms
 
-Format of the encrypted file:
+The program uses the integrated encryption scheme with the following
+parameters:
+ - xchacha cipher for data encryption
+ - poly1305 for message authentication code
+ - x25519 (curve25519) or passphrase and argon2i to derive keys
+
+The program can also sign files using eddsa (ed25519).
+
+** File format
+
+Encrypted files have the following format:
 
 #+BEGIN_EXAMPLE
-+------+-----------+------------+-----+
-| salt | parameter | ciphertext | mac |
-+------+-----------+------------+-----+
++-----------------+----------------------+----------------+------------+
+| salt (16 bytes) | parameter (32 bytes) | mac (16 bytes) | ciphertext |
++-----------------+----------------------+----------------+------------+
 #+END_EXAMPLE
 
-Size of the fields:
-- salt: 32 bytes
-- parameter: 32 bytes
-- mac: 64 bytes
+** Encryption process
 
-Encryption process:
-- The cleartext is encrypted by the cipher (chacha).
-- The mac (hmac using blake2) is computed on the ciphertext.
-- The key and the initialization vector for the cipher and the key for the message authentication code are derived either from a salt and a passphrase or from a salt, a parameter and an ECC (curve25519) key (pbkdf2, 10000 iterations of blake2). The parameter is not used in passphrase mode, it just contains random data.
+A random salt is generated.
 
-When using the command to simultaneously sign and encrypt a file, the
-encryption is done on a tar file containing the input file and the signature
-of the input file.
+A shared secret is computed. It is either a passphrase or the result
+of a Diffie-Hellman exchange with curve25519 keys.
+The /parameter/ field of the encrypted file contains either unused
+random data if the encryption is done with a passphrase, or
+a curve25519 public key allowing the recipient to compute the shared
+secret if the encryption is done with curve25519 keys.
+
+The key and nonce for xchacha and the key for poly1305 are derived
+from the salt and the shared secret using argon2i.
+
+The cleartext is encrypted with xchacha.
+
+The message authentication code is computed on the ciphertext using
+poly1305.
+
+When using a command to simultaneously sign and encrypt a file, the
+encryption is done on a tar file containing the input file and the
+signature of the input file.
 
 * Dependencies
+** Common Lisp
 
-- [[http://www.sbcl.org/][sbcl]] as Common Lisp implementation (it also works with ccl, ecl and clisp, but 200 times slower).
+[[http://www.sbcl.org/][sbcl]] as Common Lisp implementation is recommended.
+It also works with other implementations, but much more slowly.
+
+** Libraries
+
 - [[http://www.cliki.net/Archive][archive]]
 - [[http://www.cliki.net/Babel][babel]]
 - [[http://cliki.net/Ironclad][ironclad]]
@@ -42,33 +66,32 @@ These libraries can be installed easily with [[http://www.quicklisp.org][quickli
 
 * Examples
 
+#+BEGIN_SRC lisp
+(asdf:load-system "iescrypt")
+(in-package iescrypt)
+#+END_SRC
+
 Encrypt and decrypt a file with a passphrase:
 
 #+BEGIN_SRC lisp
-(require 'iescrypt)
-(in-package iescrypt)
-(encrypt-file "clear.file" "cipher.file" :passphrase "passphrase")
-(decrypt-file "cipher.file" "clear.file" :passphrase "passphrase")
+(encrypt-file-with-passphrase "clear.file" "cipher.file")
+(decrypt-file-with-passphrase "cipher.file" "clear.file")
 #+END_SRC
 
 Encrypt and decrypt a file with a key pair:
 
 #+BEGIN_SRC lisp
 (make-encryption-key-pair "key")
-(let ((pubkey (read-public-key "key.pub")
-      (privkey (read-private-key "key"))))
-  (encrypt-file "clear.file" "cipher.file" :public-key pubkey)
-  (decrypt-file "cipher.file" "clear.file" :private-key privkey))
+(encrypt-file-with-key "clear.file" "cipher.file" "key.pub")
+(decrypt-file-with-key "cipher.file" "clear.file" "key")
 #+END_SRC
 
 Sign and verify a file:
 
 #+BEGIN_SRC lisp
 (make-signing-key-pair "key")
-(let ((pubkey (read-public-key "key.pub")
-      (privkey (read-private-key "key"))))
-  (let ((signature (sign-file "some.file" "key" "some.file.sig")))
-    (verify-file-signature "some.file" signature))
+(sign-file "some.file" "some.file.sig" "key")
+(verify-file-signature "some.file" "some.file.sig" "key.pub")
 #+END_SRC
 
 Simultaneously sign and encrypt a file:
@@ -76,18 +99,17 @@ Simultaneously sign and encrypt a file:
 #+BEGIN_SRC lisp
 (make-encryption-key-pair "enckey")
 (make-signing-key-pair "sigkey")
-(let ((encpubkey (read-public-key "enckey.pub"))
-      (encprivkey (read-private-key "enckey"))
-      (sigpubkey (read-public-key "sigkey.pub"))
-      (sigprivkey (read-private-key "sigkey")))
-  (sign-and-encrypt-file "clear.file" "cipher.file" sigkey :public-key enckey.pub)
-  (decrypt-and-verify-file "cipher.file" "clear.file" nil :private-key enckey))
+(sign-and-encrypt-file-with-key "clear.file" "cipher.file" "sigkey" "enckey.pub")
+(decrypt-file-with-key-and-verify-signature "cipher.file" "clear.file" "enckey" "sigkey.pub")
 #+END_SRC
 
-## Executable
+* Executable
 
-You can build executables using the Makefile.
+You can build a standalone executable using the Makefile.
 
 #+BEGIN_SRC shell
 make
+./iescrypt gen-enc key
+./iescrypt enc clear.file cipher.file key.pub
+./iescrypt dec cipher.file clear.file key
 #+END_SRC

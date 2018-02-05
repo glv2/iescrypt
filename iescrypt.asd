@@ -1,24 +1,7 @@
-;;;; -*- mode: lisp; indent-tabs-mode: nil -*-
-
-#|
-This file is part of iescrypt, a program for encrypting, decrypting
-and signing files.
-
-Copyright 2015-2018 Guillaume LE VAILLANT
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-|#
+;;;; This file is part of iescrypt
+;;;; Copyright 2015-2018 Guillaume LE VAILLANT
+;;;; Distributed under the GNU GPL v3 or later.
+;;;; See the file LICENSE for terms of use and distribution.
 
 
 (cl:in-package :asdf-user)
@@ -39,6 +22,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   :build-pathname "iescrypt"
   :entry-point "iescrypt:main"
   :components ((:module "src"
-                :components ((:file "iescrypt" :depends-on ("package"))
-                             (:file "ies")
-                             (:file "package" :depends-on ("ies"))))))
+                :components ((:file "iescrypt")))))
