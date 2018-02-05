@@ -101,6 +101,7 @@ Simultaneously sign and encrypt a file:
 #+END_SRC
 
 * Executable
+** Makefile
 
 You can build a standalone executable using the Makefile.
 
@@ -110,3 +111,66 @@ make
 ./iescrypt enc clear.file cipher.file key.pub
 ./iescrypt dec cipher.file clear.file key
 #+END_SRC
+
+** Commands
+
+Usage: iescrypt <command> <arguments>
+
+*** gen-enc <file>
+
+Generate a key pair for encryption. The private key is written
+to 'file' and the public key is written to 'file.pub'.
+
+*** gen-sig <file>
+
+Generate a key pair for signature. The private key is written
+to 'file' and the public key is written to 'file.pub'.
+
+*** enc <input file> <output file> <public key file>
+
+Encrypt a file with a public key.
+
+*** dec <input file> <output file> <private key file>
+
+Decrypt a file that was encrypted with a public key using
+the matching private key.
+
+*** penc <input file> <output file> [passphrase file]
+
+Encrypt a file using a passphrase.
+
+*** pdec <input file> <output file> [passphrase file]
+
+Decrypt a file using a passphrase.
+
+*** sig <input file> <signature file> <private key file>
+
+Sign a file with a private key.
+
+*** ver <input-file> <signature-file> [public key file]
+
+Verify a signature of a file.
+If a public key file is specified, also verify that the signature
+was made with the matching private key.
+
+*** sig-enc <input file> <output file> <signature private key file> <encryption public key file>
+
+Sign a file with a private key and encrypt the file and the signature
+with a public key.
+
+*** dec-ver <input file> <output file> <encryption private key file> [signature public key file]
+
+Decrypt a file with a private key and verify that it has a valid
+signature. If a signature public key is specified, also verify that
+the signature was made with the matching private key.
+
+*** sig-penc <input file> <output file> <signature private key file> [passphrase file]
+
+Sign a file with a private key and encrypt the file and the signature
+with a passphrase.
+
+***  pdec-ver <input file> <output file> [passphrase file [signature public key file]]
+
+Decrypt a file with a passphrase and verify that it has a valid
+signature. If a signature public key is specified, also verify that
+the signature was made with the matching private key.
