@@ -193,7 +193,7 @@ write the ciphertext to OUTPUT-FILE."
           (file-position output-stream (+ +salt-length+ +parameter-length+ +mac-length+))
           (let ((mac (ies-encrypt-stream shared-secret salt input-stream output-stream)))
             (file-position output-stream (+ +salt-length+ +parameter-length+))
-            (write-sequence output-stream mac)))))))
+            (write-sequence mac output-stream)))))))
 
 (defun decrypt-file-with-key (input-file output-file private-key-file)
   "Decrypt INPUT-FILE using the private key in PRIVATE-KEY-FILE and
@@ -232,7 +232,7 @@ specified, and asked to the user otherwise."
         (file-position output-stream (+ +salt-length+ +parameter-length+ +mac-length+))
         (let ((mac (ies-encrypt-stream shared-secret salt input-stream output-stream)))
           (file-position output-stream (+ +salt-length+ +parameter-length+))
-          (write-sequence output-stream mac))))))
+          (write-sequence mac output-stream))))))
 
 (defun decrypt-file-with-passphrase (input-file output-file &optional passphrase-file)
   "Decrypt INPUT-FILE and write the cleartext to OUTPUT-FILE. The
@@ -395,8 +395,8 @@ was made using the matching private key."
 ;;;
 
 (defparameter *command-table*
-  (list (cons "gen-sig" (list #'make-encryption-key-pair 1 1))
-        (cons "gen-enc" (list #'make-signing-key-pair 1 1))
+  (list (cons "gen-enc" (list #'make-encryption-key-pair 1 1))
+        (cons "gen-sig" (list #'make-signing-key-pair 1 1))
         (cons "enc" (list #'encrypt-file-with-key 3 3))
         (cons "dec" (list #'decrypt-file-with-key 3 3))
         (cons "penc" (list #'encrypt-file-with-passphrase 2 3))
