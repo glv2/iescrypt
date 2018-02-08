@@ -282,7 +282,7 @@ specified, and asked to the user otherwise."
           (error "Input stream too short"))
         (let* ((passphrase (if passphrase-file
                                (read-file-line passphrase-file)
-                               (get-passphrase t)))
+                               (get-passphrase nil)))
                (shared-secret (string-to-octets passphrase :encoding :utf-8))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
           (or (constant-time-equal mac computed-mac)
