@@ -18,8 +18,23 @@
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
   :depends-on ("archive" "babel" "ironclad" "uiop")
+  :in-order-to ((test-op (test-op "iescrypt/tests")))
   :build-operation program-op
   :build-pathname "iescrypt"
   :entry-point "iescrypt:main"
   :components ((:module "src"
                 :components ((:file "iescrypt")))))
+
+(defsystem "iescrypt/tests"
+  :name "iescrypt/tests"
+  :description "Tests for iescrypt"
+  :version "1.0"
+  :author "Guillaume LE VAILLANT"
+  :license "GPL-3"
+  :depends-on ("fiveam" "iescrypt" "uiop")
+  :in-order-to ((test-op (load-op "iescrypt/tests")))
+  :perform (test-op (o s)
+             (let ((tests (uiop:find-symbol* 'iescrypt-tests :iescrypt/tests)))
+               (uiop:symbol-call :fiveam 'run! tests)))
+  :components ((:module "tests"
+                :components ((:file "tests")))))

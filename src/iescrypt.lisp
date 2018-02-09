@@ -313,7 +313,8 @@ made using the matching private key."
     (if (and (or (null public-key) (constant-time-equal public-key signature-public-key))
              (verify-signature pk hash sig))
         (let ((signer (byte-array-to-hex-string signature-public-key)))
-          (format t "Valid signature from ~a~%" signer))
+          (format t "Valid signature from ~a~%" signer)
+          t)
         (error "Bad signature"))))
 
 (defun sign-and-encrypt-file-with-key (input-file output-file signature-private-key-file encryption-public-key-file)
