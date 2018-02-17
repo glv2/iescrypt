@@ -174,3 +174,18 @@ with a passphrase.
 Decrypt a file with a passphrase and verify that it has a valid
 signature. If a signature public key is specified, also verify that
 the signature was made with the matching private key.
+
+* Tests
+
+The tests require the [[https://common-lisp.net/project/fiveam/][fiveam]] library.
+
+#+BEGIN_SRC lisp
+(asdf:test-system "iescrypt")
+#+END_SRC
+
+There is also a /test.sh/ shell script in the /tests/ directory to
+test the standalone executable.
+
+#+BEGIN_SRC shell
+tests/test.sh
+#+END_SRC
