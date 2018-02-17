@@ -42,6 +42,10 @@
                  until (null b1)
                  always (= b1 b2))))))
 
+(defmacro quietly (&body body)
+  `(with-open-stream (*standard-output* (make-broadcast-stream))
+     ,@body))
+
 
 (def-suite iescrypt-tests
   :description "Unit tests for iescrypt")
@@ -87,6 +91,16 @@
       (delete-file-if-exists key.pub))))
 
 (test decrypt-file-with-key
+  (let ((message "message")
+        (ciphertext "ciphertext-key")
+        (cleartext (tmp-filename))
+        (key "ekey"))
+    (unwind-protect
+         (progn
+           (decrypt-file-with-key ciphertext cleartext key)
+           (is-true (file-exists-p cleartext))
+           (is-true (same-content-p message cleartext)))
+      (delete-file-if-exists cleartext)))
   (let* ((message (tmp-file))
          (ciphertext (tmp-filename))
          (cleartext (tmp-filename))
@@ -118,6 +132,16 @@
       (delete-file-if-exists passphrase))))
 
 (test decrypt-file-with-passphrase
+  (let ((message "message")
+        (ciphertext "ciphertext-passphrase")
+        (cleartext (tmp-filename))
+        (passphrase "passphrase"))
+    (unwind-protect
+         (progn
+           (decrypt-file-with-passphrase ciphertext cleartext passphrase)
+           (is-true (file-exists-p cleartext))
+           (is-true (same-content-p message cleartext)))
+      (delete-file-if-exists cleartext)))
   (let ((message (tmp-file))
         (ciphertext (tmp-filename))
         (cleartext (tmp-filename))
@@ -150,6 +174,10 @@
 
 
 (test verify-file-signature
+  (let ((message "message")
+        (signature "signature")
+        (key.pub "skey.pub"))
+    (is-true (quietly (verify-file-signature message signature key.pub))))
   (let* ((message (tmp-file))
          (signature (tmp-filename))
          (key (tmp-filename))
@@ -159,7 +187,7 @@
            (make-signing-key-pair key)
            (sign-file message signature key)
            (is-true (file-exists-p signature))
-           (is-true (verify-file-signature message signature key.pub)))
+           (is-true (quietly (verify-file-signature message signature key.pub))))
       (delete-file-if-exists message)
       (delete-file-if-exists signature)
       (delete-file-if-exists key)
@@ -186,6 +214,17 @@
       (delete-file-if-exists sig-key.pub))))
 
 (test decrypt-file-with-key-and-verify-signature
+  (let ((message "message")
+        (ciphertext "ciphertext-sig-key")
+        (cleartext (tmp-filename))
+        (enc-key "ekey")
+        (sig-key.pub "skey.pub"))
+    (unwind-protect
+         (progn
+           (is-true (quietly (decrypt-file-with-key-and-verify-signature ciphertext cleartext enc-key sig-key.pub)))
+           (is-true (file-exists-p cleartext))
+           (is-true (same-content-p message cleartext)))
+      (delete-file-if-exists cleartext)))
   (let* ((message (tmp-file))
          (ciphertext (tmp-filename))
          (cleartext (tmp-filename))
@@ -198,7 +237,7 @@
            (make-encryption-key-pair enc-key)
            (make-signing-key-pair sig-key)
            (sign-and-encrypt-file-with-key message ciphertext sig-key enc-key.pub)
-           (is-true (decrypt-file-with-key-and-verify-signature ciphertext cleartext enc-key sig-key.pub))
+           (is-true (quietly (decrypt-file-with-key-and-verify-signature ciphertext cleartext enc-key sig-key.pub)))
            (is-true (file-exists-p cleartext))
            (is-true (same-content-p message cleartext)))
       (delete-file-if-exists message)
@@ -227,6 +266,17 @@
       (delete-file-if-exists sig-key.pub))))
 
 (test decrypt-file-with-passphrase-and-verify-signature
+  (let ((message "message")
+        (ciphertext "ciphertext-sig-passphrase")
+        (cleartext (tmp-filename))
+        (passphrase "passphrase")
+        (sig-key.pub "skey.pub"))
+    (unwind-protect
+         (progn
+           (is-true (quietly (decrypt-file-with-passphrase-and-verify-signature ciphertext cleartext passphrase sig-key.pub)))
+           (is-true (file-exists-p cleartext))
+           (is-true (same-content-p message cleartext)))
+      (delete-file-if-exists cleartext)))
   (let* ((message (tmp-file))
          (ciphertext (tmp-filename))
          (cleartext (tmp-filename))
@@ -237,7 +287,7 @@
          (progn
            (make-signing-key-pair sig-key)
            (sign-and-encrypt-file-with-passphrase message ciphertext sig-key passphrase)
-           (is-true (decrypt-file-with-passphrase-and-verify-signature ciphertext cleartext passphrase sig-key.pub))
+           (is-true (quietly (decrypt-file-with-passphrase-and-verify-signature ciphertext cleartext passphrase sig-key.pub)))
            (is-true (file-exists-p cleartext))
            (is-true (same-content-p message cleartext)))
       (delete-file-if-exists message)
