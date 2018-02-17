@@ -91,10 +91,10 @@
       (delete-file-if-exists key.pub))))
 
 (test decrypt-file-with-key
-  (let ((message "message")
-        (ciphertext "ciphertext-key")
+  (let ((message (asdf:system-relative-pathname "iescrypt/tests" "tests/message"))
+        (ciphertext (asdf:system-relative-pathname "iescrypt/tests" "tests/ciphertext-key"))
         (cleartext (tmp-filename))
-        (key "ekey"))
+        (key (asdf:system-relative-pathname "iescrypt/tests" "tests/ekey")))
     (unwind-protect
          (progn
            (decrypt-file-with-key ciphertext cleartext key)
@@ -132,10 +132,10 @@
       (delete-file-if-exists passphrase))))
 
 (test decrypt-file-with-passphrase
-  (let ((message "message")
-        (ciphertext "ciphertext-passphrase")
+  (let ((message (asdf:system-relative-pathname "iescrypt/tests" "tests/message"))
+        (ciphertext (asdf:system-relative-pathname "iescrypt/tests" "tests/ciphertext-passphrase"))
         (cleartext (tmp-filename))
-        (passphrase "passphrase"))
+        (passphrase (asdf:system-relative-pathname "iescrypt/tests" "tests/passphrase")))
     (unwind-protect
          (progn
            (decrypt-file-with-passphrase ciphertext cleartext passphrase)
@@ -174,9 +174,9 @@
 
 
 (test verify-file-signature
-  (let ((message "message")
-        (signature "signature")
-        (key.pub "skey.pub"))
+  (let ((message (asdf:system-relative-pathname "iescrypt/tests" "tests/message"))
+        (signature (asdf:system-relative-pathname "iescrypt/tests" "tests/signature"))
+        (key.pub (asdf:system-relative-pathname "iescrypt/tests" "tests/skey.pub")))
     (is-true (quietly (verify-file-signature message signature key.pub))))
   (let* ((message (tmp-file))
          (signature (tmp-filename))
@@ -214,11 +214,11 @@
       (delete-file-if-exists sig-key.pub))))
 
 (test decrypt-file-with-key-and-verify-signature
-  (let ((message "message")
-        (ciphertext "ciphertext-sig-key")
+  (let ((message (asdf:system-relative-pathname "iescrypt/tests" "tests/message"))
+        (ciphertext (asdf:system-relative-pathname "iescrypt/tests" "tests/ciphertext-sig-key"))
         (cleartext (tmp-filename))
-        (enc-key "ekey")
-        (sig-key.pub "skey.pub"))
+        (enc-key (asdf:system-relative-pathname "iescrypt/tests" "tests/ekey"))
+        (sig-key.pub (asdf:system-relative-pathname "iescrypt/tests" "tests/skey.pub")))
     (unwind-protect
          (progn
            (is-true (quietly (decrypt-file-with-key-and-verify-signature ciphertext cleartext enc-key sig-key.pub)))
@@ -266,11 +266,11 @@
       (delete-file-if-exists sig-key.pub))))
 
 (test decrypt-file-with-passphrase-and-verify-signature
-  (let ((message "message")
-        (ciphertext "ciphertext-sig-passphrase")
+  (let ((message (asdf:system-relative-pathname "iescrypt/tests" "tests/message"))
+        (ciphertext (asdf:system-relative-pathname "iescrypt/tests" "tests/ciphertext-sig-passphrase"))
         (cleartext (tmp-filename))
-        (passphrase "passphrase")
-        (sig-key.pub "skey.pub"))
+        (passphrase (asdf:system-relative-pathname "iescrypt/tests" "tests/passphrase"))
+        (sig-key.pub (asdf:system-relative-pathname "iescrypt/tests" "tests/skey.pub")))
     (unwind-protect
          (progn
            (is-true (quietly (decrypt-file-with-passphrase-and-verify-signature ciphertext cleartext passphrase sig-key.pub)))
