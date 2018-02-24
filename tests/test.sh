@@ -25,9 +25,9 @@ fi
 rm -f skey skey.pub
 if ${IESCRYPT} gen-sig skey && test -f skey && test -f skey.pub;
 then
-    echo "gen-enc test succeeded"
+    echo "gen-sig test succeeded"
 else
-    echo "gen-enc test failed"
+    echo "gen-sig test failed"
     FAILURE=1
 fi
 
