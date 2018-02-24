@@ -31,12 +31,36 @@
 (defconstant +cipher-mode+ :stream)
 (defconstant +cipher-key-length+ 32)
 (defconstant +iv-length+ 24)
-(defconstant +digest+ :blake2)
 (defconstant +mac+ :poly1305)
 (defconstant +mac-key-length+ 32)
 (defconstant +mac-length+ 16)
 (defconstant +salt-length+ 16)
+(defconstant +dh-key-length+ 32)
 (defconstant +parameter-length+ 32)
+(defun generate-dh-key-pair ()
+  (generate-key-pair :curve25519))
+(defun get-dh-private-key (key)
+  (curve25519-key-x key))
+(defun get-dh-public-key (key)
+  (curve25519-key-y key))
+(defun make-dh-private-key (private-key)
+  (make-private-key :curve25519 :x private-key))
+(defun make-dh-public-key (public-key)
+  (make-public-key :curve25519 :y public-key))
+(defconstant +signature-key-length+ 32)
+(defconstant +signature-length+ 64)
+(defun generate-signature-key-pair ()
+  (generate-key-pair :ed25519))
+(defun get-signature-private-key (key)
+  (ed25519-key-x key))
+(defun get-signature-public-key (key)
+  (ed25519-key-y key))
+(defun make-signature-private-key (private-key)
+  (make-private-key :ed25519 :x private-key))
+(defun make-signature-public-key (public-key)
+  (make-public-key :ed25519 :y public-key))
+(defconstant +digest+ :blake2)
+(defconstant +buffer-length+ 4096)
 
 
 ;;;
@@ -74,7 +98,7 @@ from the SHARED-SECRET and the SALT."
       (derive-keys shared-secret salt)
     (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
           (mac (make-mac +mac+ mac-key))
-          (buffer (make-array 4096 :element-type '(unsigned-byte 8)))
+          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
           (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
          ((zerop n) (produce-mac mac))
       (encrypt cipher buffer buffer :plaintext-end n)
@@ -102,7 +126,7 @@ the SHARED-SECRET and the SALT."
       (derive-keys shared-secret salt)
     (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
           (mac (make-mac +mac+ mac-key))
-          (buffer (make-array 4096 :element-type '(unsigned-byte 8)))
+          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
           (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
          ((zerop n) (produce-mac mac))
       (update-mac mac buffer :end n)
@@ -194,20 +218,21 @@ or a byte stream."
 ;;;
 
 (defun make-encryption-key-pair (filename)
-  "Generate a new key pair for curve25519. The private key is written to
-FILENAME and the public key is written to FILENAME.pub."
+  "Generate a new key pair for Diffie-Hellman key exchanges. The
+private key is written to FILENAME and the public key is written to
+FILENAME.pub."
   (multiple-value-bind (sk pk)
-      (generate-key-pair :curve25519)
-    (write-file filename (curve25519-key-x sk))
-    (write-file (concatenate 'string filename ".pub") (curve25519-key-y pk))))
+      (generate-dh-key-pair)
+    (write-file filename (get-dh-private-key sk))
+    (write-file (concatenate 'string filename ".pub") (get-dh-public-key pk))))
 
 (defun make-signing-key-pair (filename)
-  "Generate a new key pair for ed25519. The private key is written to
-FILENAME and the public key is written to FILENAME.pub."
+  "Generate a new key pair for signatures. The private key is written
+to FILENAME and the public key is written to FILENAME.pub."
   (multiple-value-bind (sk pk)
-      (generate-key-pair :ed25519)
-    (write-file filename (ed25519-key-x sk))
-    (write-file (concatenate 'string filename ".pub") (ed25519-key-y pk))))
+      (generate-signature-key-pair)
+    (write-file filename (get-signature-private-key sk))
+    (write-file (concatenate 'string filename ".pub") (get-signature-public-key pk))))
 
 (defun encrypt-file-with-key (input-file output-file public-key-file)
   "Encrypt INPUT-FILE using the public key in PUBLIC-KEY-FILE and
@@ -215,10 +240,10 @@ write the ciphertext to OUTPUT-FILE."
   (with-open-file (input-stream input-file :element-type '(unsigned-byte 8))
     (with-open-file (output-stream output-file :direction :output :element-type '(unsigned-byte 8))
       (multiple-value-bind (sk2 pk2)
-          (generate-key-pair :curve25519)
-        (let* ((public-key (read-file public-key-file 32))
-               (pk1 (make-public-key :curve25519 :y public-key))
-               (parameter (curve25519-key-y pk2))
+          (generate-dh-key-pair)
+        (let* ((public-key (read-file public-key-file +dh-key-length+))
+               (pk1 (make-dh-public-key public-key))
+               (parameter (get-dh-public-key pk2))
                (shared-secret (diffie-hellman sk2 pk1))
                (salt (random-data +salt-length+)))
           (write-sequence salt output-stream)
@@ -240,9 +265,9 @@ write the cleartext to OUTPUT-FILE."
                      (= (read-sequence parameter input-stream) +parameter-length+)
                      (= (read-sequence mac input-stream) +mac-length+))
           (error "Input stream too short"))
-        (let* ((private-key (read-file private-key-file 32))
-               (sk1 (make-private-key :curve25519 :x private-key))
-               (pk2 (make-public-key :curve25519 :y parameter))
+        (let* ((private-key (read-file private-key-file +dh-key-length+))
+               (sk1 (make-dh-private-key private-key))
+               (pk2 (make-dh-public-key parameter))
                (shared-secret (diffie-hellman sk1 pk2))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
           (or (constant-time-equal mac computed-mac)
@@ -291,8 +316,8 @@ specified, and asked to the user otherwise."
 (defun sign-file (input-file signature-file private-key-file)
   "Write the signature of INPUT-FILE by the private key in
 PRIVATE-KEY-FILE to SIGNATURE-FILE."
-  (let* ((private-key (make-private-key :ed25519 :x (read-file private-key-file 32)))
-         (public-key (ed25519-key-y private-key))
+  (let* ((private-key (make-signature-private-key (read-file private-key-file +signature-key-length+)))
+         (public-key (get-signature-public-key private-key))
          (hash (digest-file +digest+ input-file))
          (signature (concatenate '(simple-array (unsigned-byte 8) (*))
                                  public-key
@@ -303,12 +328,12 @@ PRIVATE-KEY-FILE to SIGNATURE-FILE."
   "Verify that SIGNATURE-FILE contains a valid sigature of INPUT-FILE.
 If a PUBLIC-KEY-FILE is specified, also verify that the signature was
 made using the matching private key."
-  (let* ((signature (read-file signature-file 96))
+  (let* ((signature (read-file signature-file (+ +signature-key-length+ +signature-length+)))
          (public-key (when public-key-file
-                       (read-file public-key-file 32)))
-         (signature-public-key (subseq signature 0 32))
-         (pk (make-public-key :ed25519 :y signature-public-key))
-         (sig (subseq signature 32))
+                       (read-file public-key-file +signature-key-length+)))
+         (signature-public-key (subseq signature 0 +signature-key-length+))
+         (pk (make-signature-public-key signature-public-key))
+         (sig (subseq signature +signature-key-length+))
          (hash (digest-file +digest+ input-file)))
     (if (and (or (null public-key) (constant-time-equal public-key signature-public-key))
              (verify-signature pk hash sig))
