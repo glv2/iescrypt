@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPTDIR=$(dirname "${BASH_SOURCE[0]}")
-IESCRYPT=$(cd "${SCRIPTDIR}" && pwd)/../iescrypt
+IESCRYPT=$(cd "${SCRIPTDIR}" && pwd)/../iescrypt-c
 FAILURE=0
 CURRDIR=${PWD}
 WORKDIR=$(mktemp -d)
@@ -59,24 +59,6 @@ then
     echo "sig/ver test succeeded"
 else
     echo "sig/ver test failed"
-    FAILURE=1
-fi
-
-rm -f c.dat d.dat m.dat.sig
-if ${IESCRYPT} sig-penc m.dat c.dat skey passphrase && test -f c.dat && test -n "$(${IESCRYPT} pdec-ver c.dat d.dat passphrase skey.pub | grep 'Valid signature')" && diff -q m.dat d.dat;
-then
-    echo "sig-penc/pdec-ver test succeeded"
-else
-    echo "sig-penc/pdec-ver test failed"
-    FAILURE=1
-fi
-
-rm -f c.dat d.dat m.dat.sig
-if ${IESCRYPT} sig-enc m.dat c.dat skey ekey.pub && test -f c.dat && test -n "$(${IESCRYPT} dec-ver c.dat d.dat ekey skey.pub | grep 'Valid signature')" && diff -q m.dat d.dat;
-then
-    echo "sig-enc/dec-ver test succeeded"
-else
-    echo "sig-enc/dec-ver test failed"
     FAILURE=1
 fi
 

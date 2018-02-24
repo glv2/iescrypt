@@ -7,7 +7,7 @@
 (cl:in-package :asdf-user)
 
 ;; Redefine 'program-op' to actvate compression
-#+sbcl
+#+(and sbcl sb-core-compression)
 (defmethod perform ((o program-op) (c system))
   (uiop:dump-image (output-file o c) :executable t :compression t))
 
@@ -23,7 +23,8 @@
   :build-pathname "iescrypt"
   :entry-point "iescrypt:main"
   :components ((:module "src"
-                :components ((:file "iescrypt")))))
+                :components ((:module "lisp"
+                              :components ((:file "iescrypt")))))))
 
 (defsystem "iescrypt/tests"
   :name "iescrypt/tests"

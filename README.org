@@ -1,59 +1,20 @@
 #+TITLE: iescrypt
 
 The *iescrypt* program is a tool to encrypt, decrypt and sign files.
+There are two versions of it, one is written in Common Lisp, the is
+other written in C.
 
-* Details
-** Algorithms
+* Common Lisp version
 
-The program uses the integrated encryption scheme with the following
-parameters:
- - xchacha cipher for data encryption
- - poly1305 for message authentication code
- - x25519 (curve25519) or passphrase and argon2i to derive keys
+The Common Lisp version can be used either as a library or as
+a standalone executable.
 
-The program can also sign files using eddsa (ed25519). The signature
-is made on the blake2 hash of the input file.
-
-** File format
-
-Encrypted files have the following format:
-
-#+BEGIN_EXAMPLE
-+-----------------+----------------------+----------------+------------+
-| salt (16 bytes) | parameter (32 bytes) | mac (16 bytes) | ciphertext |
-+-----------------+----------------------+----------------+------------+
-#+END_EXAMPLE
-
-** Encryption process
-
-A random salt is generated.
-
-A shared secret is computed. It is either a passphrase or the result
-of a Diffie-Hellman exchange with curve25519 keys.
-The /parameter/ field of the encrypted file contains either unused
-random data if the encryption is done with a passphrase, or
-a curve25519 public key allowing the recipient to compute the shared
-secret if the encryption is done with curve25519 keys.
-
-The key and nonce for xchacha and the key for poly1305 are derived
-from the salt and the shared secret using argon2i.
-
-The cleartext is encrypted with xchacha.
-
-The message authentication code is computed on the ciphertext using
-poly1305.
-
-When using a command to simultaneously sign and encrypt a file, the
-encryption is done on a tar file containing the input file and the
-signature of the input file.
-
-* Dependencies
-** Common Lisp
+** Dependencies
 
 [[http://www.sbcl.org/][sbcl]] as Common Lisp implementation is recommended.
 It also works with other implementations, but much more slowly.
 
-** Libraries
+*** Libraries
 
 - [[http://www.cliki.net/Archive][archive]]
 - [[http://www.cliki.net/Babel][babel]]
@@ -61,7 +22,7 @@ It also works with other implementations, but much more slowly.
 
 These libraries can be installed easily with [[http://www.quicklisp.org][quicklisp]].
 
-* Examples
+** Examples
 
 #+BEGIN_SRC lisp
 (asdf:load-system "iescrypt")
@@ -100,22 +61,60 @@ Simultaneously sign and encrypt a file:
 (decrypt-file-with-key-and-verify-signature "cipher.file" "clear.file" "enckey" "sigkey.pub")
 #+END_SRC
 
-* Executable
-** Makefile
+** Standalone executable
 
 You can build a standalone executable using the Makefile.
 
 #+BEGIN_SRC shell
-make
-./iescrypt gen-enc key
-./iescrypt enc clear.file cipher.file key.pub
-./iescrypt dec cipher.file clear.file key
+make iescrypt
 #+END_SRC
 
-** Commands
+** Tests
+
+The tests require the [[https://common-lisp.net/project/fiveam/][fiveam]] library.
+
+#+BEGIN_SRC lisp
+(asdf:test-system "iescrypt")
+#+END_SRC
+
+There is also a /test.sh/ shell script in the /tests/ directory to
+test the standalone executable.
+
+#+BEGIN_SRC shell
+tests/test.sh
+#+END_SRC
+
+* C version
+
+The C version can be used as a standalone executable.
+It includes Loup Vaillant's [[https://github.com/LoupVaillant/Monocypher][Monocypher]] cryptographic library.
+
+** Dependencies
+
+A C compiler.
+
+** Standalone executable
+
+You can build the standalone executable using the Makefile.
+
+#+BEGIN_SRC shell
+make iescrypt-c
+#+END_SRC
+
+** Tests
+
+There is a /test-c.sh/ shell script in the /tests/ directory to
+test the standalone executable.
+
+#+BEGIN_SRC shell
+tests/test-c.sh
+#+END_SRC
+
+* Commands of the standalone executable
 
 Usage: iescrypt <command> <arguments>
 
+** Commands
 *** gen-enc <file>
 
 Generate a key pair for encryption. The private key is written
@@ -169,23 +168,58 @@ the signature was made with the matching private key.
 Sign a file with a private key and encrypt the file and the signature
 with a passphrase.
 
-***  pdec-ver <input file> <output file> [passphrase file [signature public key file]]
+*** pdec-ver <input file> <output file> [passphrase file [signature public key file]]
 
 Decrypt a file with a passphrase and verify that it has a valid
 signature. If a signature public key is specified, also verify that
 the signature was made with the matching private key.
 
-* Tests
+** Limitations
 
-The tests require the [[https://common-lisp.net/project/fiveam/][fiveam]] library.
+Currently, the commands /sig-enc/, /dec-ver/, /sig-penc/ and
+/pdec-ver/ are not implemented in the C version.
 
-#+BEGIN_SRC lisp
-(asdf:test-system "iescrypt")
-#+END_SRC
+* Details
+** Algorithms
 
-There is also a /test.sh/ shell script in the /tests/ directory to
-test the standalone executable.
+The program uses the integrated encryption scheme with the following
+parameters:
+ - xchacha cipher for data encryption
+ - poly1305 for message authentication code
+ - x25519 (curve25519) or passphrase and argon2i to derive keys
 
-#+BEGIN_SRC shell
-tests/test.sh
-#+END_SRC
+The program can also sign files using eddsa (ed25519). The signature
+is made on the blake2 hash of the input file.
+
+** File format
+
+Encrypted files have the following format:
+
+#+BEGIN_EXAMPLE
++-----------------+----------------------+----------------+------------+
+| salt (16 bytes) | parameter (32 bytes) | mac (16 bytes) | ciphertext |
++-----------------+----------------------+----------------+------------+
+#+END_EXAMPLE
+
+** Encryption process
+
+A random salt is generated.
+
+A shared secret is computed. It is either a passphrase or the result
+of a Diffie-Hellman exchange with curve25519 keys.
+The /parameter/ field of the encrypted file contains either unused
+random data if the encryption is done with a passphrase, or
+a curve25519 public key allowing the recipient to compute the shared
+secret if the encryption is done with curve25519 keys.
+
+The key and nonce for xchacha and the key for poly1305 are derived
+from the salt and the shared secret using argon2i.
+
+The cleartext is encrypted with xchacha.
+
+The message authentication code is computed on the ciphertext using
+poly1305.
+
+When using a command to simultaneously sign and encrypt a file, the
+encryption is done on a tar file containing the input file and the
+signature of the input file.
