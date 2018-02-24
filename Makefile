@@ -18,7 +18,7 @@ iescrypt: ${lisp_sources}
 		--eval "(uiop:quit)"
 
 iescrypt-c: ${c_headers} ${c_sources}
-	${CC} -O2 -march=native -DED25519_SHA512 -o iescrypt-c ${c_sources}
+	${CC} -O3 -march=native -DED25519_SHA512 -o iescrypt-c ${c_sources}
 
 clean:
 	rm -f iescrypt iescrypt-c

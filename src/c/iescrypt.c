@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/random.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
@@ -89,20 +88,6 @@ void print_hex(uint8_t *data, uint32_t data_length)
   }
 }
 
-void random_data(uint8_t *data, uint32_t data_length)
-{
-  ssize_t n = data_length;
-  ssize_t t = 0;
-
-  do
-  {
-    t = getrandom(data + data_length - n, n, 0);
-    CHECK_IF_ERROR(t);
-    n -= t;
-  }
-  while(n > 0);
-}
-
 void read_data(int input, uint8_t *data, uint32_t data_length)
 {
   size_t n = 0;
@@ -165,6 +150,54 @@ void write_file(char *filename, uint8_t *data, uint32_t data_length)
   write_data(output, data, data_length);
   close(output);
 }
+
+#if defined(__linux__) && defined(__GLIBC__) && (__GLIBC__ >= 2) && (__GLIBC_MINOR__ >= 25)
+#include <sys/random.h>
+void random_data(uint8_t *data, uint32_t data_length)
+{
+  size_t n = data_length;
+  ssize_t t = 0;
+
+  do
+  {
+    t = getrandom(data + data_length - n, n, 0);
+    CHECK_IF_ERROR(t);
+    n -= t;
+  }
+  while(n > 0);
+}
+#elif defined(_WIN32)
+#include <windows.h>
+#include <wincrypt.h>
+void random_data(uint8_t *data, uint32_t data_length)
+{
+  HCRYPTPROV prov;
+  if(!CryptAcquireContext(&prov, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
+  {
+    fprintf(stderr, "random_data: could not get random data\n");
+    exit(EXIT_FAILURE);
+  }
+  if(!CryptGenRandom(prov, (DWORD) data_length, data))
+  {
+    fprintf(stderr, "random_data: could not get random data\n");
+    exit(EXIT_FAILURE);
+  }
+  if(!CryptReleaseContext(prov, 0))
+  {
+    fprintf(stderr, "random_data: could not get random data\n");
+    exit(EXIT_FAILURE);
+  }
+}
+#else
+void random_data(uint8_t *data, uint32_t data_length)
+{
+  int input = open("/dev/urandom", O_RDONLY | O_NOCTTY | O_CLOEXEC);
+
+  CHECK_IF_ERROR(input);
+  read_data(input, data, data_length);
+  close(input);
+}
+#endif
 
 uint32_t end_of_line(uint8_t *data, uint32_t data_length)
 {
