@@ -14,6 +14,12 @@
 #include <unistd.h>
 #include "monocypher.h"
 
+#ifndef _WIN32
+/* Win32 requires the non-standard O_BINARY flag to open binary files.
+ * Let's define it to nothing on standard architectures. */
+#define O_BINARY 0
+#endif
+
 
 /*
  * Parameters
@@ -182,7 +188,7 @@ void read_file(uint8_t **data, uint32_t *data_length, char *filename, uint32_t e
 {
   int r;
   struct stat info;
-  int input = open(filename, O_RDONLY);
+  int input = open(filename, O_RDONLY | O_BINARY);
 
   CHECK_IF_ERROR(input);
   r = fstat(input, &info);
@@ -201,7 +207,7 @@ void read_file(uint8_t **data, uint32_t *data_length, char *filename, uint32_t e
 
 void write_file(char *filename, uint8_t *data, uint32_t data_length)
 {
-  int output = open(filename, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int output = open(filename, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
   CHECK_IF_ERROR(output);
   write_data(output, data, data_length);
@@ -249,7 +255,7 @@ void random_data(uint8_t *data, uint32_t data_length)
 #else
 void random_data(uint8_t *data, uint32_t data_length)
 {
-  int input = open("/dev/urandom", O_RDONLY | O_NOCTTY | O_CLOEXEC);
+  int input = open("/dev/urandom", O_RDONLY | O_NOCTTY | O_CLOEXEC | O_BINARY);
 
   CHECK_IF_ERROR(input);
   read_data(input, data, data_length);
@@ -467,8 +473,8 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   int r = 0;
-  int input = open(input_file, O_RDONLY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int input = open(input_file, O_RDONLY | O_BINARY);
+  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
   CHECK_IF_ERROR(input);
   CHECK_IF_ERROR(output);
@@ -507,8 +513,8 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   uint8_t mac[MAC_LENGTH];
   uint8_t computed_mac[MAC_LENGTH];
   int r = 0;
-  int input = open(input_file, O_RDONLY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int input = open(input_file, O_RDONLY | O_BINARY);
+  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
   CHECK_IF_ERROR(input);
   CHECK_IF_ERROR(output);
@@ -543,8 +549,8 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   int r = 0;
-  int input = open(input_file, O_RDONLY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int input = open(input_file, O_RDONLY | O_BINARY);
+  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
   CHECK_IF_ERROR(input);
   CHECK_IF_ERROR(output);
@@ -580,8 +586,8 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   uint8_t computed_mac[MAC_LENGTH];
-  int input = open(input_file, O_RDONLY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int input = open(input_file, O_RDONLY | O_BINARY);
+  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
   CHECK_IF_ERROR(input);
   CHECK_IF_ERROR(output);
@@ -613,7 +619,7 @@ void hash_file(uint8_t *hash, char *input_file)
   crypto_blake2b_ctx digest_ctx;
   uint8_t buffer[BUFFER_LENGTH];
   ssize_t r = 0;
-  int input = open(input_file, O_RDONLY);
+  int input = open(input_file, O_RDONLY | O_BINARY);
 
   CHECK_IF_ERROR(input);
   crypto_blake2b_init(&digest_ctx);
@@ -635,7 +641,7 @@ void sign_file(char *input_file, char *signature_file, char *private_key_file)
   uint8_t public_key[SIGNATURE_KEY_LENGTH];
   uint8_t hash[DIGEST_LENGTH];
   uint8_t signature[SIGNATURE_LENGTH];
-  int output = open(signature_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int output = open(signature_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
   CHECK_IF_ERROR(output);
   read_file(&private_key, &private_key_length, private_key_file, SIGNATURE_KEY_LENGTH);
