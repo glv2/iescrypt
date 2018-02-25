@@ -11,7 +11,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <termios.h>
 #include <unistd.h>
 #include "monocypher.h"
 
@@ -31,52 +30,110 @@
 #define SIGNATURE_KEY_LENGTH 32
 #define SIGNATURE_LENGTH 64
 #define BUFFER_LENGTH 4096
-#define CHECK_IF_ERROR(var) \
-{ \
-  if(var == -1) \
+#define CHECK_IF_ERROR(var) do \
   { \
-    perror(__FUNCTION__); \
-    exit(EXIT_FAILURE); \
+    if(var == -1) \
+    { \
+      fprintf(stderr, "Error: %s: ", __FUNCTION__); \
+      perror(""); \
+      exit(EXIT_FAILURE); \
+    } \
   } \
-}
-#define CHECK_IF_MEMORY_ERROR(var) \
-{ \
-  if(var == NULL) \
+  while(0);
+#define CHECK_IF_MEMORY_ERROR(var) do \
   { \
-    fprintf(stderr, "%s: memory allocation failed\n", __FUNCTION__); \
-    exit(EXIT_FAILURE); \
+    if(var == NULL) \
+    { \
+      fprintf(stderr, "Error: %s: memory allocation failed\n", __FUNCTION__); \
+      exit(EXIT_FAILURE); \
+    } \
   } \
-}
+  while(0);
 
 
 /*
  * Utils
  */
 
-struct termios terminal_attributes;
+#if defined(_WIN32)
+#include <windows.h>
 
 void disable_terminal_echo()
 {
   int r;
-  struct termios new_attributes;
+  DWORD terminal_attributes;
+  HANDLE terminal_handle = GetStdHandle(STD_INPUT_HANDLE);
 
-  r = tcgetattr(STDIN_FILENO, &new_attributes);
-  CHECK_IF_ERROR(r);
-  new_attributes.c_lflag &= ~(ICANON | ECHO | ECHOE | ECHOK | ECHONL);
-  new_attributes.c_cc[VMIN] = 1;
-  new_attributes.c_cc[VTIME] = 0;
-  r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_attributes);
-  if(r == -1)
+  if((terminal_handle == INVALID_HANDLE_VALUE) || (terminal_handle == NULL))
   {
-    fprintf(stderr, "get_passphrase: could not disable terminal echo\n");
+    fprintf(stderr, "Error: %s: could not get terminal handle\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
+  r = GetConsoleMode(terminal_handle, &terminal_attributes);
+  if(r == 0)
+  {
+    fprintf(stderr, "Error: %s: could not get terminal attributes\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
+  r = SetConsoleMode(terminal_handle, terminal_attributes & (~ENABLE_ECHO_INPUT));
+  if(r == 0)
+  {
+    fprintf(stderr, "Error: %s: could not set terminal attributes\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
 }
 
-void restore_terminal_echo()
+void enable_terminal_echo()
 {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal_attributes);
+  int r;
+  DWORD terminal_attributes;
+  HANDLE terminal_handle = GetStdHandle(STD_INPUT_HANDLE);
+
+  if((terminal_handle == INVALID_HANDLE_VALUE) || (terminal_handle == NULL))
+  {
+    fprintf(stderr, "Error: %s: could not get terminal handle\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
+  r = GetConsoleMode(terminal_handle, &terminal_attributes);
+  if(r == 0)
+  {
+    fprintf(stderr, "Error: %s: could not get terminal attributes\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
+  r = SetConsoleMode(terminal_handle, terminal_attributes | ENABLE_ECHO_INPUT);
+  if(r == 0)
+  {
+    fprintf(stderr, "Error: %s: could not set terminal attributes\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
 }
+#else
+#include <termios.h>
+
+void disable_terminal_echo()
+{
+  int r;
+  struct termios terminal_attributes;
+
+  r = tcgetattr(STDIN_FILENO, &terminal_attributes);
+  CHECK_IF_ERROR(r);
+  terminal_attributes.c_lflag &= ~ECHO;
+  r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal_attributes);
+  CHECK_IF_ERROR(r);
+}
+
+void enable_terminal_echo()
+{
+  int r;
+  struct termios terminal_attributes;
+
+  r = tcgetattr(STDIN_FILENO, &terminal_attributes);
+  CHECK_IF_ERROR(r);
+  terminal_attributes.c_lflag |= ECHO;
+  r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal_attributes);
+  CHECK_IF_ERROR(r);
+}
+#endif
 
 void print_hex(uint8_t *data, uint32_t data_length)
 {
@@ -99,7 +156,7 @@ void read_data(int input, uint8_t *data, uint32_t data_length)
     CHECK_IF_ERROR(t);
     if(t == 0)
     {
-      fprintf(stderr, "%s: input stream too short\n", __FUNCTION__);
+      fprintf(stderr, "Error: %s: input stream too short\n", __FUNCTION__);
       exit(EXIT_FAILURE);
     }
     n += t;
@@ -133,7 +190,7 @@ void read_file(uint8_t **data, uint32_t *data_length, char *filename, uint32_t e
   *data_length = info.st_size;
   if((expected_length > 0) && (expected_length != *data_length))
   {
-    fprintf(stderr, "read_file: the file \"%s\" is not %u bytes long\n", filename, expected_length);
+    fprintf(stderr, "Error: %s: the file \"%s\" is not %u bytes long\n", __FUNCTION__, filename, expected_length);
     exit(EXIT_FAILURE);
   }
   *data = (uint8_t *) malloc(*data_length);
@@ -172,19 +229,20 @@ void random_data(uint8_t *data, uint32_t data_length)
 void random_data(uint8_t *data, uint32_t data_length)
 {
   HCRYPTPROV prov;
+
   if(!CryptAcquireContext(&prov, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
   {
-    fprintf(stderr, "random_data: could not get random data\n");
+    fprintf(stderr, "Error: %s: could not get random data\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   if(!CryptGenRandom(prov, (DWORD) data_length, data))
   {
-    fprintf(stderr, "random_data: could not get random data\n");
+    fprintf(stderr, "Error: %s: could not get random data\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   if(!CryptReleaseContext(prov, 0))
   {
-    fprintf(stderr, "random_data: could not get random data\n");
+    fprintf(stderr, "Error: %s: could not get random data\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
 }
@@ -233,17 +291,24 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
   char *t;
   char buffer[BUFFER_LENGTH];
 
+  disable_terminal_echo();
   printf("Enter the passphrase: ");
   t = fgets(buffer, BUFFER_LENGTH, stdin);
   if(t == NULL)
   {
-    fprintf(stderr, "get_passphrase: could not read passphrase\n");
+    fprintf(stderr, "Error: %s: could not read passphrase\n", __FUNCTION__);
+    enable_terminal_echo();
     exit(EXIT_FAILURE);
   }
   printf("\n");
-  *passphrase_length = end_of_line(buffer, BUFFER_LENGTH);
+  *passphrase_length = end_of_line((uint8_t *) buffer, BUFFER_LENGTH);
   *passphrase = (uint8_t *) malloc(*passphrase_length);
-  CHECK_IF_MEMORY_ERROR(*passphrase);
+  if(*passphrase == NULL)
+  {
+    fprintf(stderr, "Error: %s: memory allocation failed\n", __FUNCTION__);
+    enable_terminal_echo();
+    exit(EXIT_FAILURE);
+  }
   memcpy(*passphrase, buffer, *passphrase_length);
   if(verify != 0)
   {
@@ -251,16 +316,19 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
     t = fgets(buffer, BUFFER_LENGTH, stdin);
     if(t == NULL)
     {
-      fprintf(stderr, "get_passphrase: could not read passphrase\n");
+      fprintf(stderr, "Error: %s: could not read passphrase\n", __FUNCTION__);
+      enable_terminal_echo();
       exit(EXIT_FAILURE);
     }
     printf("\n");
-    if(memcmp(buffer, *passphrase, end_of_line(buffer, BUFFER_LENGTH)) != 0)
+    if(memcmp(buffer, *passphrase, end_of_line((uint8_t *) buffer, BUFFER_LENGTH)) != 0)
     {
-      fprintf(stderr, "get_passphrase: passphrases don't match\n");
+      fprintf(stderr, "Error: %s: passphrases don't match\n", __FUNCTION__);
+      enable_terminal_echo();
       exit(EXIT_FAILURE);
     }
   }
+  enable_terminal_echo();
 }
 
 
@@ -270,16 +338,18 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
 
 void derive_keys(uint8_t *cipher_key, uint8_t *iv, uint8_t *mac_key, uint8_t *shared_secret, uint32_t shared_secret_length, uint8_t *salt)
 {
-  const uint32_t nb_blocks = 4096;
-  uint8_t work_area[1024 * nb_blocks];
   const uint32_t data_length = CIPHER_KEY_LENGTH + IV_LENGTH + MAC_KEY_LENGTH;
   uint8_t data[data_length];
+  const uint32_t nb_blocks = 4096;
+  uint8_t *work_area = (uint8_t *) malloc(1024 * nb_blocks);
 
+  CHECK_IF_MEMORY_ERROR(work_area);
   crypto_argon2i(data, data_length, work_area, 4096, 3, shared_secret, shared_secret_length, salt, SALT_LENGTH);
   memcpy(cipher_key, data, CIPHER_KEY_LENGTH);
   memcpy(iv, data + CIPHER_KEY_LENGTH, IV_LENGTH);
   memcpy(mac_key, data + CIPHER_KEY_LENGTH + IV_LENGTH, MAC_KEY_LENGTH);
   crypto_wipe(data, data_length);
+  free(work_area);
 }
 
 void ies_encrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_secret_length, uint8_t *salt, int input, int output)
@@ -409,7 +479,7 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   r = crypto_x25519(shared_secret, private_key, public_key);
   if(r == -1)
   {
-    fprintf(stderr, "%s: bad public key\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: bad public key\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   write_data(output, salt, SALT_LENGTH);
@@ -449,13 +519,13 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   r = crypto_x25519(shared_secret, private_key, parameter);
   if(r == -1)
   {
-    fprintf(stderr, "%s: bad public key\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: bad public key\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   ies_decrypt_stream(computed_mac, shared_secret, DH_KEY_LENGTH, salt, input, output);
   if(crypto_verify16(mac, computed_mac) == -1)
   {
-    fprintf(stderr, "Invalid authentication code\n");
+    fprintf(stderr, "Error: %s: invalid message authentication code\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   crypto_wipe(private_key, DH_KEY_LENGTH);
@@ -510,7 +580,6 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   uint8_t computed_mac[MAC_LENGTH];
-  int r = 0;
   int input = open(input_file, O_RDONLY);
   int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
@@ -530,7 +599,7 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   ies_decrypt_stream(computed_mac, shared_secret, shared_secret_length, salt, input, output);
   if(crypto_verify16(mac, computed_mac) == -1)
   {
-    fprintf(stderr, "Invalid authentication code\n");
+    fprintf(stderr, "Error: %s: invalid message authentication code\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   crypto_wipe(shared_secret, shared_secret_length);
@@ -649,12 +718,6 @@ void usage()
 
 int main(int argc, char **argv)
 {
-  int r;
-
-  r = tcgetattr(STDIN_FILENO, &terminal_attributes);
-  CHECK_IF_ERROR(r);
-  atexit(restore_terminal_echo);
-  disable_terminal_echo();
   if(argc >= 2)
   {
     if(strcasecmp(argv[1], "gen-enc") == 0)
@@ -738,6 +801,6 @@ int main(int argc, char **argv)
     }
   }
   usage();
-  fprintf(stderr, "\nInvalid command\n");
+  fprintf(stderr, "\nError: invalid command\n");
   exit(EXIT_FAILURE);
 }
