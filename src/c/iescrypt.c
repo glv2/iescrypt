@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "microtar.h"
 #include "monocypher.h"
 
 #ifndef _WIN32
@@ -36,7 +37,8 @@
 #define SIGNATURE_KEY_LENGTH 32
 #define SIGNATURE_LENGTH 64
 #define BUFFER_LENGTH 4096
-#define CHECK_IF_ERROR(var) do \
+#define CHECK_IF_ERROR(var) \
+  do \
   { \
     if(var == -1) \
     { \
@@ -46,11 +48,22 @@
     } \
   } \
   while(0);
-#define CHECK_IF_MEMORY_ERROR(var) do \
+#define CHECK_IF_MEMORY_ERROR(var) \
+  do \
   { \
     if(var == NULL) \
     { \
       fprintf(stderr, "Error: %s: memory allocation failed\n", __FUNCTION__); \
+      exit(EXIT_FAILURE); \
+    } \
+  } \
+  while(0);
+#define CHECK_IF_TAR_ERROR(var) \
+  do \
+  { \
+    if(var != MTAR_ESUCCESS) \
+    { \
+      fprintf(stderr, "Error: %s: %s\n", __FUNCTION__, mtar_strerror(var)); \
       exit(EXIT_FAILURE); \
     } \
   } \
@@ -337,6 +350,119 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
   enable_terminal_echo();
 }
 
+char * get_temporary_filename(char *suffix)
+{
+  uint32_t id;
+  char *filename = (char *) malloc(15 + strlen(suffix));
+
+  CHECK_IF_MEMORY_ERROR(filename);
+  random_data((uint8_t *) &id, 4);
+  sprintf(filename, "tmp-%u%s", id, suffix);
+  return(filename);
+}
+
+void make_tar_archive(char *archive_file, char *input_file, char* signature_file)
+{
+  int r;
+  uint8_t *data;
+  uint32_t data_length;
+  mtar_t archive;
+
+  r = mtar_open(&archive, archive_file, "w");
+  CHECK_IF_TAR_ERROR(r);
+  read_file(&data, &data_length, input_file, 0);
+  r = mtar_write_file_header(&archive, input_file, data_length);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_write_data(&archive, data, data_length);
+  CHECK_IF_TAR_ERROR(r);
+  free(data);
+  read_file(&data, &data_length, signature_file, 0);
+  r = mtar_write_file_header(&archive, signature_file, data_length);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_write_data(&archive, data, data_length);
+  CHECK_IF_TAR_ERROR(r);
+  free(data);
+  r = mtar_finalize(&archive);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_close(&archive);
+  CHECK_IF_TAR_ERROR(r);
+}
+
+void extract_tar_archive(char *archive_file, char *output_file, char *signature_file)
+{
+  int r;
+  uint8_t *data;
+  mtar_t archive;
+  mtar_header_t header_1;
+  mtar_header_t header_2;
+  mtar_header_t header_3;
+  mtar_header_t *header_output;
+  mtar_header_t *header_signature;
+
+  r = mtar_open(&archive, archive_file, "r");
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_read_header(&archive, &header_1);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_next(&archive);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_read_header(&archive, &header_2);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_next(&archive);
+  CHECK_IF_TAR_ERROR(r);
+  r = mtar_read_header(&archive, &header_3);
+  if(r != MTAR_ENULLRECORD)
+  {
+    fprintf(stderr, "Error: %s: unknown decrypted file format\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
+  if(strlen(header_1.name) < strlen(header_2.name))
+  {
+    header_output = &header_1;
+    header_signature = &header_2;
+  }
+  else
+  {
+    header_output = &header_2;
+    header_signature = &header_1;
+  }
+  r = mtar_find(&archive, header_output->name, header_output);
+  CHECK_IF_TAR_ERROR(r);
+  data = (uint8_t *) malloc(header_output->size);
+  CHECK_IF_MEMORY_ERROR(data);
+  r = mtar_read_data(&archive, data, header_output->size);
+  CHECK_IF_TAR_ERROR(r);
+  write_file(output_file, data, header_output->size);
+  free(data);
+  r = mtar_find(&archive, header_signature->name, header_signature);
+  CHECK_IF_TAR_ERROR(r);
+  data = (uint8_t *) malloc(header_signature->size);
+  CHECK_IF_MEMORY_ERROR(data);
+  r = mtar_read_data(&archive, data, header_signature->size);
+  CHECK_IF_TAR_ERROR(r);
+  write_file(signature_file, data, header_signature->size);
+  free(data);
+}
+
+void hash_file(uint8_t *hash, char *input_file)
+{
+  crypto_blake2b_ctx digest_ctx;
+  uint8_t buffer[BUFFER_LENGTH];
+  ssize_t r = 0;
+  int input = open(input_file, O_RDONLY | O_BINARY);
+
+  CHECK_IF_ERROR(input);
+  crypto_blake2b_init(&digest_ctx);
+  do
+  {
+    r = read(input, buffer, BUFFER_LENGTH);
+    CHECK_IF_ERROR(r);
+    crypto_blake2b_update(&digest_ctx, buffer, r);
+  }
+  while(r > 0);
+  crypto_blake2b_final(&digest_ctx, hash);
+  close(input);
+}
+
 
 /*
  * Integrated encryption scheme
@@ -614,26 +740,6 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   close(output);
 }
 
-void hash_file(uint8_t *hash, char *input_file)
-{
-  crypto_blake2b_ctx digest_ctx;
-  uint8_t buffer[BUFFER_LENGTH];
-  ssize_t r = 0;
-  int input = open(input_file, O_RDONLY | O_BINARY);
-
-  CHECK_IF_ERROR(input);
-  crypto_blake2b_init(&digest_ctx);
-  do
-  {
-    r = read(input, buffer, BUFFER_LENGTH);
-    CHECK_IF_ERROR(r);
-    crypto_blake2b_update(&digest_ctx, buffer, r);
-  }
-  while(r > 0);
-  crypto_blake2b_final(&digest_ctx, hash);
-  close(input);
-}
-
 void sign_file(char *input_file, char *signature_file, char *private_key_file)
 {
   uint8_t *private_key;
@@ -689,6 +795,70 @@ void verify_file_signature(char *input_file, char *signature_file, char *public_
   }
 }
 
+void sign_and_encrypt_file_with_key(char *input_file, char *output_file, char *signature_private_key_file, char* encryption_public_key_file)
+{
+  char *signature_file = (char *) malloc(strlen(input_file) + 5);
+  char *archive_file = (char *) malloc(strlen(input_file) + 5);
+
+  CHECK_IF_MEMORY_ERROR(signature_file);
+  CHECK_IF_MEMORY_ERROR(archive_file);
+  strcpy(signature_file, input_file);
+  strcat(signature_file, ".sig");
+  strcpy(archive_file, input_file);
+  strcat(archive_file, ".tar");
+  sign_file(input_file, signature_file, signature_private_key_file);
+  make_tar_archive(archive_file, input_file, signature_file);
+  encrypt_file_with_key(archive_file, output_file, encryption_public_key_file);
+  unlink(signature_file);
+  unlink(archive_file);
+}
+
+void decrypt_file_with_key_and_verify_signature(char *input_file, char *output_file, char *encryption_private_key_file, char *signature_public_key_file)
+{
+  char *signature_file = get_temporary_filename(".sig");
+  char *archive_file = get_temporary_filename(".tar");
+
+  decrypt_file_with_key(input_file, archive_file, encryption_private_key_file);
+  extract_tar_archive(archive_file, output_file, signature_file);
+  verify_file_signature(output_file, signature_file, signature_public_key_file);
+  unlink(signature_file);
+  unlink(archive_file);
+  free(signature_file);
+  free(archive_file);
+}
+
+void sign_and_encrypt_file_with_passphrase(char *input_file, char *output_file, char *signature_private_key_file, char* passphrase_file)
+{
+  char *signature_file = (char *) malloc(strlen(input_file) + 5);
+  char *archive_file = (char *) malloc(strlen(input_file) + 5);
+
+  CHECK_IF_MEMORY_ERROR(signature_file);
+  CHECK_IF_MEMORY_ERROR(archive_file);
+  strcpy(signature_file, input_file);
+  strcat(signature_file, ".sig");
+  strcpy(archive_file, input_file);
+  strcat(archive_file, ".tar");
+  sign_file(input_file, signature_file, signature_private_key_file);
+  make_tar_archive(archive_file, input_file, signature_file);
+  encrypt_file_with_passphrase(archive_file, output_file, passphrase_file);
+  unlink(signature_file);
+  unlink(archive_file);
+}
+
+void decrypt_file_with_passphrase_and_verify_signature(char *input_file, char *output_file, char *passphrase_file, char *signature_public_key_file)
+{
+  char *signature_file = get_temporary_filename(".sig");
+  char *archive_file = get_temporary_filename(".tar");
+
+  decrypt_file_with_passphrase(input_file, archive_file, passphrase_file);
+  extract_tar_archive(archive_file, output_file, signature_file);
+  verify_file_signature(output_file, signature_file, signature_public_key_file);
+  unlink(signature_file);
+  unlink(archive_file);
+  free(signature_file);
+  free(archive_file);
+}
+
 
 /*
  * Commands for standalone program
@@ -720,7 +890,25 @@ void print_usage()
           "  ver <input-file> <signature-file> [public key file]\n\n"
           "    Verify a signature of a file.\n"
           "    If a public key file is specified, also verify that the signature\n"
-          "    was made with the matching private key.\n");
+          "    was made with the matching private key.\n\n\n"
+          "  sig-enc <input file> <output file> <signature private key file>\n"
+          "          <encryption public key file>\n\n"
+          "    Sign a file with a private key and encrypt the file and the signature\n"
+          "    with a public key.\n\n\n"
+          "  dec-ver <input file> <output file> <encryption private key file>\n"
+          "          [signature public key file]\n\n"
+          "    Decrypt a file with a private key and verify that it has a valid\n"
+          "    signature. If a signature public key is specified, also verify that\n"
+          "    the signature was made with the matching private key.\n\n\n"
+          "  sig-penc <input file> <output file> <signature private key file>\n"
+          "           [passphrase file]\n\n"
+          "    Sign a file with a private key and encrypt the file and the signature\n"
+          "    with a passphrase.\n\n\n"
+          "  pdec-ver <input file> <output file>\n"
+          "           [passphrase file [signature public key file]]\n\n"
+          "    Decrypt a file with a passphrase and verify that it has a valid\n"
+          "    signature. If a signature public key is specified, also verify that\n"
+          "    the signature was made with the matching private key.\n\n");
 }
 
 int main(int argc, char **argv)
@@ -806,8 +994,60 @@ int main(int argc, char **argv)
         exit(EXIT_SUCCESS);
       }
     }
+    else if(strcasecmp(argv[1], "sig-enc") == 0)
+    {
+      if(argc == 6)
+      {
+        sign_and_encrypt_file_with_key(argv[2], argv[3], argv[4], argv[5]);
+        exit(EXIT_SUCCESS);
+      }
+    }
+    else if(strcasecmp(argv[1], "dec-ver") == 0)
+    {
+      if(argc == 5)
+      {
+        decrypt_file_with_key_and_verify_signature(argv[2], argv[3], argv[4], NULL);
+        exit(EXIT_SUCCESS);
+      }
+      else if(argc == 6)
+      {
+        decrypt_file_with_key_and_verify_signature(argv[2], argv[3], argv[4], argv[5]);
+        exit(EXIT_SUCCESS);
+      }
+    }
+    else if(strcasecmp(argv[1], "sig-penc") == 0)
+    {
+      if(argc == 5)
+      {
+        sign_and_encrypt_file_with_passphrase(argv[2], argv[3], argv[4], NULL);
+        exit(EXIT_SUCCESS);
+      }
+      else if(argc == 6)
+      {
+        sign_and_encrypt_file_with_passphrase(argv[2], argv[3], argv[4], argv[5]);
+        exit(EXIT_SUCCESS);
+      }
+    }
+    else if(strcasecmp(argv[1], "pdec-ver") == 0)
+    {
+      if(argc == 4)
+      {
+        decrypt_file_with_passphrase_and_verify_signature(argv[2], argv[3], NULL, NULL);
+        exit(EXIT_SUCCESS);
+      }
+      else if(argc == 5)
+      {
+        decrypt_file_with_passphrase_and_verify_signature(argv[2], argv[3], argv[4], NULL);
+        exit(EXIT_SUCCESS);
+      }
+      else if(argc == 6)
+      {
+        decrypt_file_with_passphrase_and_verify_signature(argv[2], argv[3], argv[4], argv[5]);
+        exit(EXIT_SUCCESS);
+      }
+    }
   }
   print_usage();
-  fprintf(stderr, "\nError: invalid command\n");
+  fprintf(stderr, "Error: invalid command\n");
   exit(EXIT_FAILURE);
 }

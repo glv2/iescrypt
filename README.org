@@ -87,7 +87,8 @@ tests/test.sh
 * C version
 
 The C version can be used as a standalone executable.
-It includes Loup Vaillant's [[https://github.com/LoupVaillant/Monocypher][Monocypher]] cryptographic library.
+It includes Loup Vaillant's [[https://github.com/LoupVaillant/Monocypher][monocypher]] library for cryptographic
+primitives and rxi's [[https://github.com/rxi/microtar][microtar]] library to deal with tar archives.
 
 ** Dependencies
 
@@ -101,6 +102,11 @@ You can build the standalone executable using the Makefile.
 make iescrypt-c
 #+END_SRC
 
+** Limitations
+
+The commands /sig-enc/, /dec-ver/, /sig-penc/ and /pdec-ver/ might
+fail on big files.
+
 ** Tests
 
 There is a /test-c.sh/ shell script in the /tests/ directory to
@@ -112,7 +118,9 @@ tests/test-c.sh
 
 * Commands of the standalone executable
 
+#+BEGIN_SRC shell
 Usage: iescrypt <command> <arguments>
+#+END_SRC
 
 ** Commands
 *** gen-enc <file>
@@ -173,11 +181,6 @@ with a passphrase.
 Decrypt a file with a passphrase and verify that it has a valid
 signature. If a signature public key is specified, also verify that
 the signature was made with the matching private key.
-
-** Limitations
-
-Currently, the commands /sig-enc/, /dec-ver/, /sig-penc/ and
-/pdec-ver/ are not implemented in the C version.
 
 * Details
 ** Algorithms
