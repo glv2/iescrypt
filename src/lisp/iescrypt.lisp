@@ -153,10 +153,10 @@ files in the current directory."
                         :element-type '(unsigned-byte 8))
     (let ((length (file-length file)))
       (when (and expected-length (/= length expected-length))
-        (error "The file \"~a\" is not ~d bytes long" filename expected-length))
+        (error "read-file: the file \"~a\" is not ~d bytes long" filename expected-length))
       (let ((buffer (make-array length :element-type '(unsigned-byte 8))))
         (unless (= (read-sequence buffer file) length)
-          (error "Could not read file \"~a\" completely" filename))
+          (error "read-file: could not read file \"~a\" completely" filename))
         buffer))))
 
 (defun write-file (filename input)
@@ -191,7 +191,7 @@ or a byte stream."
          (sb-posix:tcsetattr 0 sb-posix:tcsadrain ,old))))
   #-(and sbcl unix)
   `(progn
-     (format *error-output* "Warning: could not disable the terminal echo~%")
+     (format *error-output* "Warning: with-raw-io: could not disable the terminal echo~%")
      ,@body))
 
 (defun get-passphrase (verify-passphrase)
@@ -208,7 +208,7 @@ or a byte stream."
                                 (read-line))))
         (terpri)
         (unless (string= passphrase passphrase-check)
-          (error "Passphrases don't match"))))
+          (error "get-passphrase: passphrases don't match"))))
     passphrase))
 
 
@@ -263,14 +263,14 @@ write the cleartext to OUTPUT-FILE."
         (unless (and (= (read-sequence salt input-stream) +salt-length+)
                      (= (read-sequence parameter input-stream) +dh-key-length+)
                      (= (read-sequence mac input-stream) +mac-length+))
-          (error "Input stream too short"))
+          (error "decrypt-file-with-key: input stream too short"))
         (let* ((private-key (read-file private-key-file +dh-key-length+))
                (sk1 (make-dh-private-key private-key))
                (pk2 (make-dh-public-key parameter))
                (shared-secret (diffie-hellman sk1 pk2))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
           (or (constant-time-equal mac computed-mac)
-              (error "Invalid message authentication code")))))))
+              (error "decrypt-file-with-key: invalid message authentication code")))))))
 
 (defun encrypt-file-with-passphrase (input-file output-file &optional passphrase-file)
   "Encrypt INPUT-FILE and write the ciphertext to OUTPUT-FILE. The
@@ -303,14 +303,14 @@ specified, and asked to the user otherwise."
         (unless (and (= (read-sequence salt input-stream) +salt-length+)
                      (= (read-sequence parameter input-stream) +dh-key-length+)
                      (= (read-sequence mac input-stream) +mac-length+))
-          (error "Input stream too short"))
+          (error "decrypt-file-with-passphrase: input stream too short"))
         (let* ((passphrase (if passphrase-file
                                (read-file-line passphrase-file)
                                (get-passphrase nil)))
                (shared-secret (string-to-octets passphrase :encoding :utf-8))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
           (or (constant-time-equal mac computed-mac)
-              (error "Invalid message authentication code")))))))
+              (error "decrypt-file-with-passphrase: invalid message authentication code")))))))
 
 (defun sign-file (input-file signature-file private-key-file)
   "Write the signature of INPUT-FILE by the private key in
@@ -339,7 +339,7 @@ made using the matching private key."
         (let ((signer (byte-array-to-hex-string signature-public-key)))
           (format t "Valid signature from ~a~%" signer)
           t)
-        (error "Bad signature"))))
+        (error "verify-file-signature: bad signature"))))
 
 (defun sign-and-encrypt-file-with-key (input-file output-file signature-private-key-file encryption-public-key-file)
   "Sign INPUT-FILE with the private key in SIGNATURE-PRIVATE-KEY-FILE,
@@ -375,7 +375,7 @@ private key."
                (when (entry-regular-file-p entry)
                  (push (name entry) entries))))
            (unless (= (length entries) 2)
-             (error "Unknown decrypted file format"))
+             (error "decrypt-file-with-key-and-verify-signature: unknown decrypted file format"))
            (let ((data-name (first entries))
                  (signature-name (second entries)))
              (when (> (length data-name) (length signature-name))
@@ -429,7 +429,7 @@ was made using the matching private key."
                (when (entry-regular-file-p entry)
                  (push (name entry) entries))))
            (unless (= (length entries) 2)
-             (error "Unknown decrypted file format"))
+             (error "decrypt-file-with-passphrase-and-verify-signature: unknown decrypted file format"))
            (let ((data-name (first entries))
                  (signature-name (second entries)))
              (when (> (length data-name) (length signature-name))
@@ -466,8 +466,10 @@ was made using the matching private key."
         (cons "sig-penc" (list #'sign-and-encrypt-file-with-passphrase 3 4))
         (cons "pdec-ver" (list #'decrypt-file-with-passphrase-and-verify-signature 2 4))))
 
-(defparameter *usage*
-  "
+(defun print-usage ()
+  (format *error-output* "
+iescrypt 1.0
+
 Usage: iescrypt <command> <arguments>
 
 Commands:
@@ -545,26 +547,23 @@ Commands:
     Decrypt a file with a passphrase and verify that it has a valid
     signature. If a signature public key is specified, also verify that
     the signature was made with the matching private key.
-")
+
+"))
 
 (defun main (&optional (args (command-line-arguments)))
   "Entry point for standalone program."
   (handler-case
       (let ((nargs (length args)))
-        (when (zerop nargs)
-          (format *error-output* "~a~%" *usage*)
-          (error "Invalid command"))
-        (let* ((command-info (cdr (assoc (elt args 0) *command-table* :test #'string-equal)))
-               (command (car command-info))
-               (min-args (cadr command-info))
-               (max-args (caddr command-info)))
-          (if (and command (<= min-args (1- nargs) max-args))
-              (progn
-                (apply command (rest args))
-                (quit 0))
-              (progn
-                (format *error-output* "~a~%" *usage*)
-                (error "Invalid command")))))
+        (when (plusp nargs)
+          (let* ((command-info (cdr (assoc (elt args 0) *command-table* :test #'string-equal)))
+                 (command (car command-info))
+                 (min-args (cadr command-info))
+                 (max-args (caddr command-info)))
+            (when (and command (<= min-args (1- nargs) max-args))
+              (apply command (rest args))
+              (quit 0))))
+        (print-usage)
+        (error "invalid command"))
     (t (err)
       (format *error-output* "Error: ~a~%" err)
       (quit -1))))

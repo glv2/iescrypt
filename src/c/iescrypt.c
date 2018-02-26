@@ -676,7 +676,7 @@ void verify_file_signature(char *input_file, char *signature_file, char *public_
   if(((public_key != NULL) && (crypto_verify32(public_key, signature_public_key) == -1))
      || (crypto_check(signature, signature_public_key, hash, DIGEST_LENGTH) == -1))
   {
-    fprintf(stderr, "Bad signature\n");
+    fprintf(stderr, "Error: %s: bad signature\n", __FUNCTION__);
     exit(EXIT_FAILURE);
   }
   printf("Valid signature from ");
@@ -694,10 +694,11 @@ void verify_file_signature(char *input_file, char *signature_file, char *public_
  * Commands for standalone program
  */
 
-void usage()
+void print_usage()
 {
   fprintf(stderr,
-          "\nUsage: iescrypt-c <command> <arguments>\n\n"
+          "\niescrypt 1.0\n\n"
+          "Usage: iescrypt-c <command> <arguments>\n\n"
           "Commands:\n\n"
           "  gen-enc <file>\n\n"
           "     Generate a key pair for encryption. The private key is written\n"
@@ -806,7 +807,7 @@ int main(int argc, char **argv)
       }
     }
   }
-  usage();
+  print_usage();
   fprintf(stderr, "\nError: invalid command\n");
   exit(EXIT_FAILURE);
 }
