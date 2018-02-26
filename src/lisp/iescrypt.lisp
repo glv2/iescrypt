@@ -178,8 +178,7 @@ or a byte stream."
         (bits (gensym)))
     `(let ((,old (sb-posix:tcgetattr 0))
            (,new (sb-posix:tcgetattr 0))
-           (,bits (logior sb-posix:icanon sb-posix:echo sb-posix:echoe
-                          sb-posix:echok sb-posix:echonl)))
+           (,bits sb-posix:echo))
        (unwind-protect
             (progn
               (setf (sb-posix:termios-lflag ,new)
