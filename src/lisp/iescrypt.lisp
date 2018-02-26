@@ -164,6 +164,7 @@ files in the current directory."
 or a byte stream."
   (with-open-file (output filename
                           :direction :output
+                          :if-exists :supersede
                           :element-type '(unsigned-byte 8))
     (etypecase input
       (vector (write-sequence input output))
@@ -235,8 +236,13 @@ to FILENAME and the public key is written to FILENAME.pub."
 (defun encrypt-file-with-key (input-file output-file public-key-file)
   "Encrypt INPUT-FILE using the public key in PUBLIC-KEY-FILE and
 write the ciphertext to OUTPUT-FILE."
-  (with-open-file (input-stream input-file :element-type '(unsigned-byte 8))
-    (with-open-file (output-stream output-file :direction :output :element-type '(unsigned-byte 8))
+  (with-open-file (input-stream input-file
+                                :direction :input
+                                :element-type '(unsigned-byte 8))
+    (with-open-file (output-stream output-file
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :element-type '(unsigned-byte 8))
       (multiple-value-bind (sk2 pk2)
           (generate-dh-key-pair)
         (let* ((public-key (read-file public-key-file +dh-key-length+))
@@ -254,8 +260,13 @@ write the ciphertext to OUTPUT-FILE."
 (defun decrypt-file-with-key (input-file output-file private-key-file)
   "Decrypt INPUT-FILE using the private key in PRIVATE-KEY-FILE and
 write the cleartext to OUTPUT-FILE."
-  (with-open-file (input-stream input-file :element-type '(unsigned-byte 8))
-    (with-open-file (output-stream output-file :direction :output :element-type '(unsigned-byte 8))
+  (with-open-file (input-stream input-file
+                                :direction :input
+                                :element-type '(unsigned-byte 8))
+    (with-open-file (output-stream output-file
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :element-type '(unsigned-byte 8))
       (let ((salt (make-array +salt-length+ :element-type '(unsigned-byte 8)))
             (parameter (make-array +dh-key-length+ :element-type '(unsigned-byte 8)))
             (mac (make-array +mac-length+ :element-type '(unsigned-byte 8))))
@@ -275,8 +286,13 @@ write the cleartext to OUTPUT-FILE."
   "Encrypt INPUT-FILE and write the ciphertext to OUTPUT-FILE. The
 passphrase used to encrypt is read from PASSPHRASE-FILE if it is
 specified, and asked to the user otherwise."
-  (with-open-file (input-stream input-file :element-type '(unsigned-byte 8))
-    (with-open-file (output-stream output-file :direction :output :element-type '(unsigned-byte 8))
+  (with-open-file (input-stream input-file
+                                :direction :input
+                                :element-type '(unsigned-byte 8))
+    (with-open-file (output-stream output-file
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :element-type '(unsigned-byte 8))
       (let* ((passphrase (if passphrase-file
                              (read-file-line passphrase-file)
                              (get-passphrase t)))
@@ -294,8 +310,13 @@ specified, and asked to the user otherwise."
   "Decrypt INPUT-FILE and write the cleartext to OUTPUT-FILE. The
 passphrase used to decrypt is read from PASSPHRASE-FILE if it is
 specified, and asked to the user otherwise."
-  (with-open-file (input-stream input-file :element-type '(unsigned-byte 8))
-    (with-open-file (output-stream output-file :direction :output :element-type '(unsigned-byte 8))
+  (with-open-file (input-stream input-file
+                                :direction :input
+                                :element-type '(unsigned-byte 8))
+    (with-open-file (output-stream output-file
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :element-type '(unsigned-byte 8))
       (let ((salt (make-array +salt-length+ :element-type '(unsigned-byte 8)))
             (parameter (make-array +dh-key-length+ :element-type '(unsigned-byte 8)))
             (mac (make-array +mac-length+ :element-type '(unsigned-byte 8))))
@@ -388,9 +409,9 @@ private key."
                           (write-file output-file (entry-stream entry)))
                          ((string= (name entry) signature-name)
                           (write-file signature-file (entry-stream entry))))))))
-           (verify-file-signature output-file signature-file signature-public-key-file)))
-    (delete-file-if-exists signature-file)
-    (delete-file-if-exists archive-file)))
+           (verify-file-signature output-file signature-file signature-public-key-file))
+      (delete-file-if-exists signature-file)
+      (delete-file-if-exists archive-file))))
 
 (defun sign-and-encrypt-file-with-passphrase (input-file output-file signature-private-key-file &optional passphrase-file)
   "Sign INPUT-FILE with the private key in SIGNATURE-PRIVATE-KEY-FILE,
@@ -442,9 +463,9 @@ was made using the matching private key."
                           (write-file output-file (entry-stream entry)))
                          ((string= (name entry) signature-name)
                           (write-file signature-file (entry-stream entry))))))))
-           (verify-file-signature output-file signature-file signature-public-key-file)))
-    (delete-file-if-exists signature-file)
-    (delete-file-if-exists archive-file)))
+           (verify-file-signature output-file signature-file signature-public-key-file))
+      (delete-file-if-exists signature-file)
+      (delete-file-if-exists archive-file))))
 
 
 ;;;
