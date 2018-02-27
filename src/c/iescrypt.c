@@ -5,21 +5,12 @@
  * See the file LICENSE for terms of use and distribution.
  */
 
-#include <fcntl.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include "microtar.h"
 #include "monocypher.h"
-
-#ifndef _WIN32
-/* Win32 requires the non-standard O_BINARY flag to open binary files.
- * Let's define it to nothing on standard architectures. */
-#define O_BINARY 0
-#endif
 
 
 /*
@@ -37,37 +28,36 @@
 #define SIGNATURE_KEY_LENGTH 32
 #define SIGNATURE_LENGTH 64
 #define BUFFER_LENGTH 4096
-#define CHECK_IF_ERROR(var) \
+
+
+/*
+ * Errors
+ */
+
+#define CHECK_IF_ERROR_TEMPLATE(condition) \
   do \
   { \
-    if(var == -1) \
+    if(condition) \
     { \
-      fprintf(stderr, "Error: %s: ", __FUNCTION__); \
-      perror(""); \
+      fprintf(stderr, "Error: %s: %s\n", __func__, strerror(errno)); \
       exit(EXIT_FAILURE); \
     } \
   } \
-  while(0);
-#define CHECK_IF_MEMORY_ERROR(var) \
-  do \
-  { \
-    if(var == NULL) \
-    { \
-      fprintf(stderr, "Error: %s: memory allocation failed\n", __FUNCTION__); \
-      exit(EXIT_FAILURE); \
-    } \
-  } \
-  while(0);
+  while(0)
+#define CHECK_IF_ERROR(var) CHECK_IF_ERROR_TEMPLATE(var == -1)
+#define CHECK_IF_MEMORY_ERROR(var) CHECK_IF_ERROR_TEMPLATE(var == NULL)
+#define CHECK_IF_FILE_OPEN_ERROR(var) CHECK_IF_ERROR_TEMPLATE(var == NULL)
+#define CHECK_IF_FILE_ERROR(var) CHECK_IF_ERROR_TEMPLATE(ferror(var))
 #define CHECK_IF_TAR_ERROR(var) \
   do \
   { \
     if(var != MTAR_ESUCCESS) \
     { \
-      fprintf(stderr, "Error: %s: %s\n", __FUNCTION__, mtar_strerror(var)); \
+      fprintf(stderr, "Error: %s: %s\n", __func__, mtar_strerror(var)); \
       exit(EXIT_FAILURE); \
     } \
   } \
-  while(0);
+  while(0)
 
 
 /*
@@ -85,19 +75,19 @@ void disable_terminal_echo()
 
   if((terminal_handle == INVALID_HANDLE_VALUE) || (terminal_handle == NULL))
   {
-    fprintf(stderr, "Error: %s: could not get terminal handle\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get terminal handle\n", __func__);
     exit(EXIT_FAILURE);
   }
   r = GetConsoleMode(terminal_handle, &terminal_attributes);
   if(r == 0)
   {
-    fprintf(stderr, "Error: %s: could not get terminal attributes\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get terminal attributes\n", __func__);
     exit(EXIT_FAILURE);
   }
   r = SetConsoleMode(terminal_handle, terminal_attributes & (~ENABLE_ECHO_INPUT));
   if(r == 0)
   {
-    fprintf(stderr, "Error: %s: could not set terminal attributes\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not set terminal attributes\n", __func__);
     exit(EXIT_FAILURE);
   }
 }
@@ -110,19 +100,19 @@ void enable_terminal_echo()
 
   if((terminal_handle == INVALID_HANDLE_VALUE) || (terminal_handle == NULL))
   {
-    fprintf(stderr, "Error: %s: could not get terminal handle\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get terminal handle\n", __func__);
     exit(EXIT_FAILURE);
   }
   r = GetConsoleMode(terminal_handle, &terminal_attributes);
   if(r == 0)
   {
-    fprintf(stderr, "Error: %s: could not get terminal attributes\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get terminal attributes\n", __func__);
     exit(EXIT_FAILURE);
   }
   r = SetConsoleMode(terminal_handle, terminal_attributes | ENABLE_ECHO_INPUT);
   if(r == 0)
   {
-    fprintf(stderr, "Error: %s: could not set terminal attributes\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not set terminal attributes\n", __func__);
     exit(EXIT_FAILURE);
   }
 }
@@ -134,10 +124,10 @@ void disable_terminal_echo()
   int r;
   struct termios terminal_attributes;
 
-  r = tcgetattr(STDIN_FILENO, &terminal_attributes);
+  r = tcgetattr(fileno(stdin), &terminal_attributes);
   CHECK_IF_ERROR(r);
   terminal_attributes.c_lflag &= ~ECHO;
-  r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal_attributes);
+  r = tcsetattr(fileno(stdin), TCSAFLUSH, &terminal_attributes);
   CHECK_IF_ERROR(r);
 }
 
@@ -146,10 +136,10 @@ void enable_terminal_echo()
   int r;
   struct termios terminal_attributes;
 
-  r = tcgetattr(STDIN_FILENO, &terminal_attributes);
+  r = tcgetattr(fileno(stdin), &terminal_attributes);
   CHECK_IF_ERROR(r);
   terminal_attributes.c_lflag |= ECHO;
-  r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal_attributes);
+  r = tcsetattr(fileno(stdin), TCSAFLUSH, &terminal_attributes);
   CHECK_IF_ERROR(r);
 }
 #endif
@@ -164,115 +154,118 @@ void print_hex(uint8_t *data, size_t data_length)
   }
 }
 
-void read_data(int input, uint8_t *data, size_t data_length)
+void read_data(FILE *input, uint8_t *data, size_t data_length)
 {
-  size_t n = 0;
-  ssize_t t = 0;
+  size_t n;
 
-  do
+  while(data_length > 0)
   {
-    t = read(input, data + n, data_length - n);
-    CHECK_IF_ERROR(t);
-    if(t == 0)
+    n = fread(data, 1, data_length, input);
+    CHECK_IF_FILE_ERROR(input);
+    if(feof(input))
     {
-      fprintf(stderr, "Error: %s: input stream too short\n", __FUNCTION__);
+      fprintf(stderr, "Error: %s: input stream too short\n", __func__);
       exit(EXIT_FAILURE);
     }
-    n += t;
+    data += n;
+    data_length -= n;
   }
-  while(n < data_length);
 }
 
-void write_data(int output, uint8_t *data, size_t data_length)
+void write_data(FILE *output, uint8_t *data, size_t data_length)
 {
-  size_t n = data_length;
-  ssize_t t = 0;
+  size_t n;
 
-  do
+  while(data_length > 0)
   {
-    t = write(output, data + data_length - n, n);
-    CHECK_IF_ERROR(t);
-    n -= t;
+    n = fwrite(data, 1, data_length, output);
+    CHECK_IF_FILE_ERROR(output);
+    data += n;
+    data_length -= n;
   }
-  while(n > 0);
 }
 
 void read_file(uint8_t **data, size_t *data_length, char *filename, size_t expected_length)
 {
   int r;
-  struct stat info;
-  int input = open(filename, O_RDONLY | O_BINARY);
+  long int n;
+  FILE *input = fopen(filename, "rb");
 
-  CHECK_IF_ERROR(input);
-  r = fstat(input, &info);
+  CHECK_IF_FILE_OPEN_ERROR(input);
+  r = fseek(input, 0, SEEK_END);
   CHECK_IF_ERROR(r);
-  *data_length = info.st_size;
+  n = ftell(input);
+  CHECK_IF_ERROR(n);
+  *data_length = (size_t) n;
   if((expected_length > 0) && (expected_length != *data_length))
   {
-    fprintf(stderr, "Error: %s: the file \"%s\" is not %lu bytes long\n", __FUNCTION__, filename, expected_length);
+    fprintf(stderr, "Error: %s: the file \"%s\" is not %lu bytes long\n", __func__, filename, expected_length);
     exit(EXIT_FAILURE);
   }
   *data = (uint8_t *) malloc(*data_length);
   CHECK_IF_MEMORY_ERROR(*data);
+  r = fseek(input, 0, SEEK_SET);
+  CHECK_IF_ERROR(r);
   read_data(input, *data, *data_length);
-  close(input);
+  fclose(input);
 }
 
 void write_file(char *filename, uint8_t *data, size_t data_length)
 {
-  int output = open(filename, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  FILE *output = fopen(filename, "wb");
 
-  CHECK_IF_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(output);
   write_data(output, data, data_length);
-  close(output);
+  fclose(output);
 }
 
 #if defined(__linux__) && defined(__GLIBC__) && (__GLIBC__ >= 2) && (__GLIBC_MINOR__ >= 25)
 #include <sys/random.h>
+
 void random_data(uint8_t *data, unsigned int data_length)
 {
-  size_t n = data_length;
-  ssize_t t = 0;
+  ssize_t n = 0;
 
-  do
+  while(data_length > 0)
   {
-    t = getrandom(data + data_length - n, n, 0);
-    CHECK_IF_ERROR(t);
-    n -= t;
+    n = getrandom(data, data_length, 0);
+    CHECK_IF_ERROR(n);
+    data += n;
+    data_length -= n;
   }
-  while(n > 0);
 }
 #elif defined(_WIN32)
 #include <windows.h>
 #include <wincrypt.h>
+
 void random_data(uint8_t *data, unsigned int data_length)
 {
   HCRYPTPROV prov;
 
   if(!CryptAcquireContext(&prov, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
   {
-    fprintf(stderr, "Error: %s: could not get random data\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get random data\n", __func__);
     exit(EXIT_FAILURE);
   }
   if(!CryptGenRandom(prov, (DWORD) data_length, data))
   {
-    fprintf(stderr, "Error: %s: could not get random data\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get random data\n", __func__);
     exit(EXIT_FAILURE);
   }
   if(!CryptReleaseContext(prov, 0))
   {
-    fprintf(stderr, "Error: %s: could not get random data\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not get random data\n", __func__);
     exit(EXIT_FAILURE);
   }
 }
 #else
 void random_data(uint8_t *data, unsigned int data_length)
 {
-  int input = open("/dev/urandom", O_RDONLY | O_NOCTTY | O_CLOEXEC | O_BINARY);
+  FILE *input = fopen("/dev/urandom", "rb");
 
-  CHECK_IF_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(input);
   read_data(input, data, data_length);
-  close(input);
+  fclose(input);
 }
 #endif
 
@@ -315,7 +308,7 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
   t = fgets(buffer, BUFFER_LENGTH, stdin);
   if(t == NULL)
   {
-    fprintf(stderr, "Error: %s: could not read passphrase\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: could not read passphrase\n", __func__);
     enable_terminal_echo();
     exit(EXIT_FAILURE);
   }
@@ -324,7 +317,7 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
   *passphrase = (uint8_t *) malloc(*passphrase_length);
   if(*passphrase == NULL)
   {
-    fprintf(stderr, "Error: %s: memory allocation failed\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: memory allocation failed\n", __func__);
     enable_terminal_echo();
     exit(EXIT_FAILURE);
   }
@@ -335,14 +328,14 @@ void get_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, int verif
     t = fgets(buffer, BUFFER_LENGTH, stdin);
     if(t == NULL)
     {
-      fprintf(stderr, "Error: %s: could not read passphrase\n", __FUNCTION__);
+      fprintf(stderr, "Error: %s: could not read passphrase\n", __func__);
       enable_terminal_echo();
       exit(EXIT_FAILURE);
     }
     printf("\n");
     if(memcmp(buffer, *passphrase, end_of_line((uint8_t *) buffer, BUFFER_LENGTH)) != 0)
     {
-      fprintf(stderr, "Error: %s: passphrases don't match\n", __FUNCTION__);
+      fprintf(stderr, "Error: %s: passphrases don't match\n", __func__);
       enable_terminal_echo();
       exit(EXIT_FAILURE);
     }
@@ -373,7 +366,7 @@ void make_tar_archive(char *archive_file, char *input_file, char* signature_file
   read_file(&data, &data_length, input_file, 0);
   if(data_length > 4294967295)
   {
-    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __func__);
     exit(EXIT_FAILURE);
   }
   r = mtar_write_file_header(&archive, input_file, data_length);
@@ -384,7 +377,7 @@ void make_tar_archive(char *archive_file, char *input_file, char* signature_file
   read_file(&data, &data_length, signature_file, 0);
   if(data_length > 4294967295)
   {
-    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __func__);
     exit(EXIT_FAILURE);
   }
   r = mtar_write_file_header(&archive, signature_file, data_length);
@@ -422,7 +415,7 @@ void extract_tar_archive(char *archive_file, char *output_file, char *signature_
   r = mtar_read_header(&archive, &header_3);
   if(r != MTAR_ENULLRECORD)
   {
-    fprintf(stderr, "Error: %s: unknown decrypted file format\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: unknown decrypted file format\n", __func__);
     exit(EXIT_FAILURE);
   }
   if(strlen(header_1.name) < strlen(header_2.name))
@@ -457,20 +450,19 @@ void hash_file(uint8_t *hash, char *input_file)
 {
   crypto_blake2b_ctx digest_ctx;
   uint8_t buffer[BUFFER_LENGTH];
-  ssize_t r = 0;
-  int input = open(input_file, O_RDONLY | O_BINARY);
+  size_t n;
+  FILE *input = fopen(input_file, "rb");
 
-  CHECK_IF_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(input);
   crypto_blake2b_init(&digest_ctx);
-  do
+  while(!feof(input))
   {
-    r = read(input, buffer, BUFFER_LENGTH);
-    CHECK_IF_ERROR(r);
-    crypto_blake2b_update(&digest_ctx, buffer, r);
+    n = fread(buffer, 1, BUFFER_LENGTH, input);
+    CHECK_IF_FILE_ERROR(input);
+    crypto_blake2b_update(&digest_ctx, buffer, n);
   }
-  while(r > 0);
   crypto_blake2b_final(&digest_ctx, hash);
-  close(input);
+  fclose(input);
 }
 
 
@@ -494,32 +486,31 @@ void derive_keys(uint8_t *cipher_key, uint8_t *iv, uint8_t *mac_key, uint8_t *sh
   free(work_area);
 }
 
-void ies_encrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_secret_length, uint8_t *salt, int input, int output)
+void ies_encrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_secret_length, uint8_t *salt, FILE *input, FILE *output)
 {
   uint8_t cipher_key[CIPHER_KEY_LENGTH];
   uint8_t iv[IV_LENGTH];
   uint8_t mac_key[MAC_KEY_LENGTH];
   uint8_t plain_text[BUFFER_LENGTH];
   uint8_t cipher_text[BUFFER_LENGTH];
-  ssize_t r = 0;
+  size_t n;
   crypto_chacha_ctx cipher_ctx;
   crypto_poly1305_ctx mac_ctx;
 
   derive_keys(cipher_key, iv, mac_key, shared_secret, shared_secret_length, salt);
   crypto_chacha20_x_init(&cipher_ctx, cipher_key, iv);
   crypto_poly1305_init(&mac_ctx, mac_key);
-  do
+  while(!feof(input))
   {
-    r = read(input, plain_text, BUFFER_LENGTH);
-    CHECK_IF_ERROR(r);
-    if(r > 0)
+    n = fread(plain_text, 1, BUFFER_LENGTH, input);
+    CHECK_IF_FILE_ERROR(input);
+    if(n > 0)
     {
-      crypto_chacha20_encrypt(&cipher_ctx, cipher_text, plain_text, r);
-      crypto_poly1305_update(&mac_ctx, cipher_text, r);
-      write_data(output, cipher_text, r);
+      crypto_chacha20_encrypt(&cipher_ctx, cipher_text, plain_text, n);
+      crypto_poly1305_update(&mac_ctx, cipher_text, n);
+      write_data(output, cipher_text, n);
     }
   }
-  while(r > 0);
   crypto_poly1305_final(&mac_ctx, mac);
   crypto_wipe(cipher_key, CIPHER_KEY_LENGTH);
   crypto_wipe(iv, IV_LENGTH);
@@ -527,32 +518,31 @@ void ies_encrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_se
   crypto_wipe(plain_text, BUFFER_LENGTH);
 }
 
-void ies_decrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_secret_length, uint8_t *salt, int input, int output)
+void ies_decrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_secret_length, uint8_t *salt, FILE *input, FILE *output)
 {
   uint8_t cipher_key[CIPHER_KEY_LENGTH];
   uint8_t iv[IV_LENGTH];
   uint8_t mac_key[MAC_KEY_LENGTH];
   uint8_t plain_text[BUFFER_LENGTH];
   uint8_t cipher_text[BUFFER_LENGTH];
-  ssize_t r = 0;
+  size_t n;
   crypto_chacha_ctx cipher_ctx;
   crypto_poly1305_ctx mac_ctx;
 
   derive_keys(cipher_key, iv, mac_key, shared_secret, shared_secret_length, salt);
   crypto_chacha20_x_init(&cipher_ctx, cipher_key, iv);
   crypto_poly1305_init(&mac_ctx, mac_key);
-  do
+  while(!feof(input))
   {
-    r = read(input, cipher_text, BUFFER_LENGTH);
-    CHECK_IF_ERROR(r);
-    if(r > 0)
+    n = fread(cipher_text, 1, BUFFER_LENGTH, input);
+    CHECK_IF_FILE_ERROR(input);
+    if(n > 0)
     {
-      crypto_poly1305_update(&mac_ctx, cipher_text, r);
-      crypto_chacha20_encrypt(&cipher_ctx, plain_text, cipher_text, r);
-      write_data(output, plain_text, r);
+      crypto_poly1305_update(&mac_ctx, cipher_text, n);
+      crypto_chacha20_encrypt(&cipher_ctx, plain_text, cipher_text, n);
+      write_data(output, plain_text, n);
     }
   }
-  while(r > 0);
   crypto_poly1305_final(&mac_ctx, mac);
   crypto_wipe(cipher_key, CIPHER_KEY_LENGTH);
   crypto_wipe(iv, IV_LENGTH);
@@ -608,12 +598,12 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   uint8_t shared_secret[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
-  int r = 0;
-  int input = open(input_file, O_RDONLY | O_BINARY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int r;
+  FILE *input = fopen(input_file, "rb");
+  FILE *output = fopen(output_file, "wb");
 
-  CHECK_IF_ERROR(input);
-  CHECK_IF_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(output);
   read_file(&public_key, &public_key_length, public_key_file, DH_KEY_LENGTH);
   random_data(private_key, DH_KEY_LENGTH);
   crypto_x25519_public_key(parameter, private_key);
@@ -621,22 +611,22 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   r = crypto_x25519(shared_secret, private_key, public_key);
   if(r == -1)
   {
-    fprintf(stderr, "Error: %s: bad public key\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: bad public key\n", __func__);
     exit(EXIT_FAILURE);
   }
   write_data(output, salt, SALT_LENGTH);
   write_data(output, parameter, DH_KEY_LENGTH);
-  r = lseek(output, SALT_LENGTH + DH_KEY_LENGTH + MAC_LENGTH, SEEK_SET);
+  r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH + MAC_LENGTH, SEEK_SET);
   CHECK_IF_ERROR(r);
   ies_encrypt_stream(mac, shared_secret, DH_KEY_LENGTH, salt, input, output);
-  r = lseek(output, SALT_LENGTH + DH_KEY_LENGTH, SEEK_SET);
+  r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH, SEEK_SET);
   CHECK_IF_ERROR(r);
   write_data(output, mac, MAC_LENGTH);
   crypto_wipe(private_key, DH_KEY_LENGTH);
   crypto_wipe(shared_secret, DH_KEY_LENGTH);
   free(public_key);
-  close(input);
-  close(output);
+  fclose(input);
+  fclose(output);
 }
 
 void decrypt_file_with_key(char *input_file, char *output_file, char* private_key_file)
@@ -648,12 +638,12 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   uint8_t computed_mac[MAC_LENGTH];
-  int r = 0;
-  int input = open(input_file, O_RDONLY | O_BINARY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int r;
+  FILE *input = fopen(input_file, "rb");
+  FILE *output = fopen(output_file, "wb");
 
-  CHECK_IF_ERROR(input);
-  CHECK_IF_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(output);
   read_file(&private_key, &private_key_length, private_key_file, DH_KEY_LENGTH);
   read_data(input, salt, SALT_LENGTH);
   read_data(input, parameter, DH_KEY_LENGTH);
@@ -661,20 +651,20 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   r = crypto_x25519(shared_secret, private_key, parameter);
   if(r == -1)
   {
-    fprintf(stderr, "Error: %s: bad public key\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: bad public key\n", __func__);
     exit(EXIT_FAILURE);
   }
   ies_decrypt_stream(computed_mac, shared_secret, DH_KEY_LENGTH, salt, input, output);
   if(crypto_verify16(mac, computed_mac) == -1)
   {
-    fprintf(stderr, "Error: %s: invalid message authentication code\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: invalid message authentication code\n", __func__);
     exit(EXIT_FAILURE);
   }
   crypto_wipe(private_key, DH_KEY_LENGTH);
   crypto_wipe(shared_secret, DH_KEY_LENGTH);
   free(private_key);
-  close(input);
-  close(output);
+  fclose(input);
+  fclose(output);
 }
 
 void encrypt_file_with_passphrase(char *input_file, char *output_file, char* passphrase_file)
@@ -684,12 +674,12 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   uint8_t parameter[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
-  int r = 0;
-  int input = open(input_file, O_RDONLY | O_BINARY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  int r;
+  FILE *input = fopen(input_file, "rb");
+  FILE *output = fopen(output_file, "wb");
 
-  CHECK_IF_ERROR(input);
-  CHECK_IF_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(output);
   if(passphrase_file != NULL)
   {
     read_passphrase(&shared_secret, &shared_secret_length, passphrase_file);
@@ -702,16 +692,16 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   random_data(salt, SALT_LENGTH);
   write_data(output, salt, SALT_LENGTH);
   write_data(output, parameter, DH_KEY_LENGTH);
-  r = lseek(output, SALT_LENGTH + DH_KEY_LENGTH + MAC_LENGTH, SEEK_SET);
+  r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH + MAC_LENGTH, SEEK_SET);
   CHECK_IF_ERROR(r);
   ies_encrypt_stream(mac, shared_secret, shared_secret_length, salt, input, output);
-  r = lseek(output, SALT_LENGTH + DH_KEY_LENGTH, SEEK_SET);
+  r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH, SEEK_SET);
   CHECK_IF_ERROR(r);
   write_data(output, mac, MAC_LENGTH);
   crypto_wipe(shared_secret, shared_secret_length);
   free(shared_secret);
-  close(input);
-  close(output);
+  fclose(input);
+  fclose(output);
 }
 
 void decrypt_file_with_passphrase(char *input_file, char *output_file, char* passphrase_file)
@@ -722,11 +712,11 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   uint8_t computed_mac[MAC_LENGTH];
-  int input = open(input_file, O_RDONLY | O_BINARY);
-  int output = open(output_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  FILE *input = fopen(input_file, "rb");
+  FILE *output = fopen(output_file, "wb");
 
-  CHECK_IF_ERROR(input);
-  CHECK_IF_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(output);
   if(passphrase_file != NULL)
   {
     read_passphrase(&shared_secret, &shared_secret_length, passphrase_file);
@@ -741,13 +731,13 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   ies_decrypt_stream(computed_mac, shared_secret, shared_secret_length, salt, input, output);
   if(crypto_verify16(mac, computed_mac) == -1)
   {
-    fprintf(stderr, "Error: %s: invalid message authentication code\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: invalid message authentication code\n", __func__);
     exit(EXIT_FAILURE);
   }
   crypto_wipe(shared_secret, shared_secret_length);
   free(shared_secret);
-  close(input);
-  close(output);
+  fclose(input);
+  fclose(output);
 }
 
 void sign_file(char *input_file, char *signature_file, char *private_key_file)
@@ -757,9 +747,9 @@ void sign_file(char *input_file, char *signature_file, char *private_key_file)
   uint8_t public_key[SIGNATURE_KEY_LENGTH];
   uint8_t hash[DIGEST_LENGTH];
   uint8_t signature[SIGNATURE_LENGTH];
-  int output = open(signature_file, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  FILE *output = fopen(signature_file, "wb");
 
-  CHECK_IF_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(output);
   read_file(&private_key, &private_key_length, private_key_file, SIGNATURE_KEY_LENGTH);
   crypto_sign_public_key(public_key, private_key);
   hash_file(hash, input_file);
@@ -768,7 +758,7 @@ void sign_file(char *input_file, char *signature_file, char *private_key_file)
   write_data(output, signature, SIGNATURE_LENGTH);
   crypto_wipe(private_key, SIGNATURE_KEY_LENGTH);
   free(private_key);
-  close(output);
+  fclose(output);
 }
 
 void verify_file_signature(char *input_file, char *signature_file, char *public_key_file)
@@ -792,7 +782,7 @@ void verify_file_signature(char *input_file, char *signature_file, char *public_
   if(((public_key != NULL) && (crypto_verify32(public_key, signature_public_key) == -1))
      || (crypto_check(signature, signature_public_key, hash, DIGEST_LENGTH) == -1))
   {
-    fprintf(stderr, "Error: %s: bad signature\n", __FUNCTION__);
+    fprintf(stderr, "Error: %s: bad signature\n", __func__);
     exit(EXIT_FAILURE);
   }
   printf("Valid signature from ");
@@ -819,8 +809,8 @@ void sign_and_encrypt_file_with_key(char *input_file, char *output_file, char *s
   sign_file(input_file, signature_file, signature_private_key_file);
   make_tar_archive(archive_file, input_file, signature_file);
   encrypt_file_with_key(archive_file, output_file, encryption_public_key_file);
-  unlink(signature_file);
-  unlink(archive_file);
+  remove(signature_file);
+  remove(archive_file);
 }
 
 void decrypt_file_with_key_and_verify_signature(char *input_file, char *output_file, char *encryption_private_key_file, char *signature_public_key_file)
@@ -831,8 +821,8 @@ void decrypt_file_with_key_and_verify_signature(char *input_file, char *output_f
   decrypt_file_with_key(input_file, archive_file, encryption_private_key_file);
   extract_tar_archive(archive_file, output_file, signature_file);
   verify_file_signature(output_file, signature_file, signature_public_key_file);
-  unlink(signature_file);
-  unlink(archive_file);
+  remove(signature_file);
+  remove(archive_file);
   free(signature_file);
   free(archive_file);
 }
@@ -851,8 +841,8 @@ void sign_and_encrypt_file_with_passphrase(char *input_file, char *output_file, 
   sign_file(input_file, signature_file, signature_private_key_file);
   make_tar_archive(archive_file, input_file, signature_file);
   encrypt_file_with_passphrase(archive_file, output_file, passphrase_file);
-  unlink(signature_file);
-  unlink(archive_file);
+  remove(signature_file);
+  remove(archive_file);
 }
 
 void decrypt_file_with_passphrase_and_verify_signature(char *input_file, char *output_file, char *passphrase_file, char *signature_public_key_file)
@@ -863,8 +853,8 @@ void decrypt_file_with_passphrase_and_verify_signature(char *input_file, char *o
   decrypt_file_with_passphrase(input_file, archive_file, passphrase_file);
   extract_tar_archive(archive_file, output_file, signature_file);
   verify_file_signature(output_file, signature_file, signature_public_key_file);
-  unlink(signature_file);
-  unlink(archive_file);
+  remove(signature_file);
+  remove(archive_file);
   free(signature_file);
   free(archive_file);
 }
