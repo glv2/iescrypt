@@ -154,9 +154,9 @@ void enable_terminal_echo()
 }
 #endif
 
-void print_hex(uint8_t *data, uint32_t data_length)
+void print_hex(uint8_t *data, size_t data_length)
 {
-  unsigned int i;
+  size_t i;
 
   for(i = 0; i < data_length; i++)
   {
@@ -164,7 +164,7 @@ void print_hex(uint8_t *data, uint32_t data_length)
   }
 }
 
-void read_data(int input, uint8_t *data, uint32_t data_length)
+void read_data(int input, uint8_t *data, size_t data_length)
 {
   size_t n = 0;
   ssize_t t = 0;
@@ -183,7 +183,7 @@ void read_data(int input, uint8_t *data, uint32_t data_length)
   while(n < data_length);
 }
 
-void write_data(int output, uint8_t *data, uint32_t data_length)
+void write_data(int output, uint8_t *data, size_t data_length)
 {
   size_t n = data_length;
   ssize_t t = 0;
@@ -197,7 +197,7 @@ void write_data(int output, uint8_t *data, uint32_t data_length)
   while(n > 0);
 }
 
-void read_file(uint8_t **data, uint32_t *data_length, char *filename, uint32_t expected_length)
+void read_file(uint8_t **data, size_t *data_length, char *filename, size_t expected_length)
 {
   int r;
   struct stat info;
@@ -209,7 +209,7 @@ void read_file(uint8_t **data, uint32_t *data_length, char *filename, uint32_t e
   *data_length = info.st_size;
   if((expected_length > 0) && (expected_length != *data_length))
   {
-    fprintf(stderr, "Error: %s: the file \"%s\" is not %u bytes long\n", __FUNCTION__, filename, expected_length);
+    fprintf(stderr, "Error: %s: the file \"%s\" is not %lu bytes long\n", __FUNCTION__, filename, expected_length);
     exit(EXIT_FAILURE);
   }
   *data = (uint8_t *) malloc(*data_length);
@@ -218,7 +218,7 @@ void read_file(uint8_t **data, uint32_t *data_length, char *filename, uint32_t e
   close(input);
 }
 
-void write_file(char *filename, uint8_t *data, uint32_t data_length)
+void write_file(char *filename, uint8_t *data, size_t data_length)
 {
   int output = open(filename, O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 
@@ -229,7 +229,7 @@ void write_file(char *filename, uint8_t *data, uint32_t data_length)
 
 #if defined(__linux__) && defined(__GLIBC__) && (__GLIBC__ >= 2) && (__GLIBC_MINOR__ >= 25)
 #include <sys/random.h>
-void random_data(uint8_t *data, uint32_t data_length)
+void random_data(uint8_t *data, unsigned int data_length)
 {
   size_t n = data_length;
   ssize_t t = 0;
@@ -245,7 +245,7 @@ void random_data(uint8_t *data, uint32_t data_length)
 #elif defined(_WIN32)
 #include <windows.h>
 #include <wincrypt.h>
-void random_data(uint8_t *data, uint32_t data_length)
+void random_data(uint8_t *data, unsigned int data_length)
 {
   HCRYPTPROV prov;
 
@@ -266,7 +266,7 @@ void random_data(uint8_t *data, uint32_t data_length)
   }
 }
 #else
-void random_data(uint8_t *data, uint32_t data_length)
+void random_data(uint8_t *data, unsigned int data_length)
 {
   int input = open("/dev/urandom", O_RDONLY | O_NOCTTY | O_CLOEXEC | O_BINARY);
 
@@ -276,7 +276,7 @@ void random_data(uint8_t *data, uint32_t data_length)
 }
 #endif
 
-uint32_t end_of_line(uint8_t *data, uint32_t data_length)
+size_t end_of_line(uint8_t *data, size_t data_length)
 {
   uint8_t *ptr_n = memchr(data, '\n', data_length);
   uint8_t *ptr_r = memchr(data, '\r', data_length);
@@ -295,10 +295,10 @@ uint32_t end_of_line(uint8_t *data, uint32_t data_length)
 void read_passphrase(uint8_t **passphrase, uint32_t *passphrase_length, char *filename)
 {
   uint8_t *data;
-  uint32_t data_length;
+  size_t data_length;
 
   read_file(&data, &data_length, filename, 0);
-  *passphrase_length = end_of_line(data, data_length);
+  *passphrase_length = (uint32_t) end_of_line(data, data_length);
   *passphrase = (uint8_t *) malloc(*passphrase_length);
   CHECK_IF_MEMORY_ERROR(*passphrase);
   memcpy(*passphrase, data, *passphrase_length);
@@ -365,18 +365,28 @@ void make_tar_archive(char *archive_file, char *input_file, char* signature_file
 {
   int r;
   uint8_t *data;
-  uint32_t data_length;
+  size_t data_length;
   mtar_t archive;
 
   r = mtar_open(&archive, archive_file, "w");
   CHECK_IF_TAR_ERROR(r);
   read_file(&data, &data_length, input_file, 0);
+  if(data_length > 4294967295)
+  {
+    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
   r = mtar_write_file_header(&archive, input_file, data_length);
   CHECK_IF_TAR_ERROR(r);
   r = mtar_write_data(&archive, data, data_length);
   CHECK_IF_TAR_ERROR(r);
   free(data);
   read_file(&data, &data_length, signature_file, 0);
+  if(data_length > 4294967295)
+  {
+    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __FUNCTION__);
+    exit(EXIT_FAILURE);
+  }
   r = mtar_write_file_header(&archive, signature_file, data_length);
   CHECK_IF_TAR_ERROR(r);
   r = mtar_write_data(&archive, data, data_length);
@@ -594,7 +604,7 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   uint8_t private_key[DH_KEY_LENGTH];
   uint8_t parameter[DH_KEY_LENGTH];
   uint8_t *public_key;
-  uint32_t public_key_length;
+  size_t public_key_length;
   uint8_t shared_secret[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
@@ -632,7 +642,7 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
 void decrypt_file_with_key(char *input_file, char *output_file, char* private_key_file)
 {
   uint8_t *private_key;
-  uint32_t private_key_length;
+  size_t private_key_length;
   uint8_t parameter[DH_KEY_LENGTH];
   uint8_t shared_secret[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
@@ -743,7 +753,7 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
 void sign_file(char *input_file, char *signature_file, char *private_key_file)
 {
   uint8_t *private_key;
-  uint32_t private_key_length;
+  size_t private_key_length;
   uint8_t public_key[SIGNATURE_KEY_LENGTH];
   uint8_t hash[DIGEST_LENGTH];
   uint8_t signature[SIGNATURE_LENGTH];
@@ -764,9 +774,9 @@ void sign_file(char *input_file, char *signature_file, char *private_key_file)
 void verify_file_signature(char *input_file, char *signature_file, char *public_key_file)
 {
   uint8_t *public_key = NULL;
-  uint32_t public_key_length;
+  size_t public_key_length;
   uint8_t *signature_data;
-  uint32_t signature_data_length;
+  size_t signature_data_length;
   uint8_t signature_public_key[SIGNATURE_KEY_LENGTH];
   uint8_t signature[SIGNATURE_LENGTH];
   uint8_t hash[DIGEST_LENGTH];
