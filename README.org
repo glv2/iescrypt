@@ -107,6 +107,26 @@ make iescrypt-c
 The commands /sig-enc/, /dec-ver/, /sig-penc/ and /pdec-ver/ might
 fail on big files.
 
+However, these commands can be simulated using the other commands.
+
+/sig-enc/ is equivalent to:
+
+#+BEGIN_SRC shell
+iescrypt-c sig file file.sig signature-key
+tar -c -f file.tar file file.sig
+iescrypt-c enc file.tar encrypted-file encryption-key.pub
+rm file.sig file.tar
+#+END_SRC
+
+/dec-ver/ is equivalent to:
+
+#+BEGIN_SRC shell
+iescrypt-c dec encrypted-file file.tar encryption-key
+tar -x -f file.tar
+iescrypt-c ver file file.sig signature-key.pub
+rm file.sig file.tar
+#+END_SRC
+
 ** Tests
 
 There is a /test-c.sh/ shell script in the /tests/ directory to
