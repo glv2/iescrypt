@@ -63,79 +63,12 @@
 
 
 ;;;
-;;; Integrated encryption scheme
-;;;
-
-(defun derive-keys (shared-secret salt)
-  "Derive a cipher key, an initialization vector and a message
-authentication key from a SHARED-SECRET and a SALT."
-  (let* ((kdf (make-kdf :argon2i :block-count 4096))
-         (data (derive-key kdf shared-secret salt 3 (+ +cipher-key-length+ +iv-length+ +mac-key-length+)))
-         (cipher-key (subseq data 0 +cipher-key-length+))
-         (iv (subseq data +cipher-key-length+ (+ +cipher-key-length+ +iv-length+)))
-         (mac-key (subseq data (+ +cipher-key-length+ +iv-length+))))
-    (values cipher-key iv mac-key)))
-
-;; (defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
-;;   "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
-;; a message authentication code of what was written to OUTPUT-STREAM.
-;; The encryption parameters (key, initialization vector) are derived
-;; from the SHARED-SECRET and the SALT."
-;;   (multiple-value-bind (cipher-key iv mac-key)
-;;       (derive-keys shared-secret salt)
-;;     (with-authenticating-stream (mac-stream +mac+ mac-key)
-;;       (with-open-stream (out-stream (make-broadcast-stream output-stream mac-stream))
-;;         (with-encrypting-stream (cipher-stream out-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
-;;           (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
-;;       (produce-mac mac-stream))))
-(defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
-  "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
-a message authentication code of what was written to OUTPUT-STREAM.
-The encryption parameters (key, initialization vector) are derived
-from the SHARED-SECRET and the SALT."
-  (multiple-value-bind (cipher-key iv mac-key)
-      (derive-keys shared-secret salt)
-    (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
-          (mac (make-mac +mac+ mac-key))
-          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
-          (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
-         ((zerop n) (produce-mac mac))
-      (encrypt cipher buffer buffer :plaintext-end n)
-      (write-sequence buffer output-stream :end n)
-      (update-mac mac buffer :end n))))
-
-;; (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
-;;   "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
-;; a message authentication code of what was read from INPUT-STREAM. The
-;; decryption parameters (key, initialization vector) are derived from
-;; the SHARED-SECRET and the SALT."
-;;   (multiple-value-bind (cipher-key iv mac-key)
-;;       (derive-keys shared-secret salt)
-;;     (with-authenticating-stream (mac-stream +mac+ mac-key)
-;;       (with-open-stream (in-stream (make-echo-stream input-stream mac-stream))
-;;         (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
-;;           (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
-;;       (produce-mac mac-stream))))
-(defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
-  "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
-a message authentication code of what was read from INPUT-STREAM. The
-decryption parameters (key, initialization vector) are derived from
-the SHARED-SECRET and the SALT."
-  (multiple-value-bind (cipher-key iv mac-key)
-      (derive-keys shared-secret salt)
-    (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
-          (mac (make-mac +mac+ mac-key))
-          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
-          (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
-         ((zerop n) (produce-mac mac))
-      (update-mac mac buffer :end n)
-      (decrypt cipher buffer buffer :ciphertext-end n)
-      (write-sequence buffer output-stream :end n))))
-
-
-;;;
 ;;; Utils
 ;;;
+
+(defun wipe (&rest buffers)
+  (dolist (buffer buffers)
+    (fill buffer 0)))
 
 (defun get-temporary-filename (&optional (suffix ""))
   "Generate a file name ending with SUFFIX that doesn't match any of the
@@ -192,6 +125,7 @@ or a byte stream."
   #-(and sbcl unix)
   `(progn
      (format *error-output* "Warning: with-raw-io: could not disable the terminal echo~%")
+     (finish-output *error-output*)
      ,@body))
 
 (defun get-passphrase (verify-passphrase)
@@ -213,6 +147,80 @@ or a byte stream."
 
 
 ;;;
+;;; Integrated encryption scheme
+;;;
+
+(defun derive-keys (shared-secret salt)
+  "Derive a cipher key, an initialization vector and a message
+authentication key from a SHARED-SECRET and a SALT."
+  (let* ((kdf (make-kdf :argon2i :block-count 4096))
+         (data (derive-key kdf shared-secret salt 3 (+ +cipher-key-length+ +iv-length+ +mac-key-length+)))
+         (cipher-key (subseq data 0 +cipher-key-length+))
+         (iv (subseq data +cipher-key-length+ (+ +cipher-key-length+ +iv-length+)))
+         (mac-key (subseq data (+ +cipher-key-length+ +iv-length+))))
+    (wipe data)
+    (values cipher-key iv mac-key)))
+
+;; (defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
+;;   "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
+;; a message authentication code of what was written to OUTPUT-STREAM.
+;; The encryption parameters (key, initialization vector) are derived
+;; from the SHARED-SECRET and the SALT."
+;;   (multiple-value-bind (cipher-key iv mac-key)
+;;       (derive-keys shared-secret salt)
+;;     (with-authenticating-stream (mac-stream +mac+ mac-key)
+;;       (with-open-stream (out-stream (make-broadcast-stream output-stream mac-stream))
+;;         (with-encrypting-stream (cipher-stream out-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
+;;           (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
+;;       (wipe cipher-key iv mac-key)
+;;       (produce-mac mac-stream))))
+(defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
+  "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
+a message authentication code of what was written to OUTPUT-STREAM.
+The encryption parameters (key, initialization vector) are derived
+from the SHARED-SECRET and the SALT."
+  (multiple-value-bind (cipher-key iv mac-key)
+      (derive-keys shared-secret salt)
+    (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
+          (mac (make-mac +mac+ mac-key))
+          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
+          (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
+         ((zerop n) (progn (wipe cipher-key iv mac-key buffer) (produce-mac mac)))
+      (encrypt cipher buffer buffer :plaintext-end n)
+      (write-sequence buffer output-stream :end n)
+      (update-mac mac buffer :end n))))
+
+;; (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
+;;   "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
+;; a message authentication code of what was read from INPUT-STREAM. The
+;; decryption parameters (key, initialization vector) are derived from
+;; the SHARED-SECRET and the SALT."
+;;   (multiple-value-bind (cipher-key iv mac-key)
+;;       (derive-keys shared-secret salt)
+;;     (with-authenticating-stream (mac-stream +mac+ mac-key)
+;;       (with-open-stream (in-stream (make-echo-stream input-stream mac-stream))
+;;         (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
+;;           (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
+;;       (wipe cipher-key iv mac-key)
+;;       (produce-mac mac-stream))))
+(defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
+  "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
+a message authentication code of what was read from INPUT-STREAM. The
+decryption parameters (key, initialization vector) are derived from
+the SHARED-SECRET and the SALT."
+  (multiple-value-bind (cipher-key iv mac-key)
+      (derive-keys shared-secret salt)
+    (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
+          (mac (make-mac +mac+ mac-key))
+          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
+          (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
+         ((zerop n) (progn (wipe cipher-key iv mac-key buffer) (produce-mac mac)))
+      (update-mac mac buffer :end n)
+      (decrypt cipher buffer buffer :ciphertext-end n)
+      (write-sequence buffer output-stream :end n))))
+
+
+;;;
 ;;; Encryption, decryption, signature and verification functions
 ;;;
 
@@ -223,7 +231,8 @@ FILENAME.pub."
   (multiple-value-bind (sk pk)
       (generate-dh-key-pair)
     (write-file filename (get-dh-private-key sk))
-    (write-file (concatenate 'string filename ".pub") (get-dh-public-key pk))))
+    (write-file (concatenate 'string filename ".pub") (get-dh-public-key pk))
+    (wipe (get-dh-private-key sk))))
 
 (defun make-signing-key-pair (filename)
   "Generate a new key pair for signatures. The private key is written
@@ -231,7 +240,8 @@ to FILENAME and the public key is written to FILENAME.pub."
   (multiple-value-bind (sk pk)
       (generate-signature-key-pair)
     (write-file filename (get-signature-private-key sk))
-    (write-file (concatenate 'string filename ".pub") (get-signature-public-key pk))))
+    (write-file (concatenate 'string filename ".pub") (get-signature-public-key pk))
+    (wipe (get-signature-private-key sk))))
 
 (defun encrypt-file-with-key (input-file output-file public-key-file)
   "Encrypt INPUT-FILE using the public key in PUBLIC-KEY-FILE and
@@ -254,6 +264,7 @@ write the ciphertext to OUTPUT-FILE."
           (write-sequence parameter output-stream)
           (file-position output-stream (+ +salt-length+ +dh-key-length+ +mac-length+))
           (let ((mac (ies-encrypt-stream shared-secret salt input-stream output-stream)))
+            (wipe (get-dh-private-key sk2) shared-secret)
             (file-position output-stream (+ +salt-length+ +dh-key-length+))
             (write-sequence mac output-stream)))))))
 
@@ -279,6 +290,7 @@ write the cleartext to OUTPUT-FILE."
                (pk2 (make-dh-public-key parameter))
                (shared-secret (diffie-hellman sk1 pk2))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
+          (wipe (get-dh-private-key sk1) shared-secret)
           (or (constant-time-equal mac computed-mac)
               (error "decrypt-file-with-key: invalid message authentication code")))))))
 
@@ -303,6 +315,7 @@ specified, and asked to the user otherwise."
         (write-sequence parameter output-stream)
         (file-position output-stream (+ +salt-length+ +dh-key-length+ +mac-length+))
         (let ((mac (ies-encrypt-stream shared-secret salt input-stream output-stream)))
+          (wipe shared-secret)
           (file-position output-stream (+ +salt-length+ +dh-key-length+))
           (write-sequence mac output-stream))))))
 
@@ -329,6 +342,7 @@ specified, and asked to the user otherwise."
                                (get-passphrase nil)))
                (shared-secret (string-to-octets passphrase :encoding :utf-8))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
+          (wipe shared-secret)
           (or (constant-time-equal mac computed-mac)
               (error "decrypt-file-with-passphrase: invalid message authentication code")))))))
 
@@ -341,6 +355,7 @@ PRIVATE-KEY-FILE to SIGNATURE-FILE."
          (signature (concatenate '(simple-array (unsigned-byte 8) (*))
                                  public-key
                                  (sign-message private-key hash))))
+    (wipe (get-signature-private-key private-key))
     (write-file signature-file signature)))
 
 (defun verify-file-signature (input-file signature-file &optional public-key-file)
