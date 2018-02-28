@@ -5,6 +5,8 @@
  * See the file LICENSE for terms of use and distribution.
  */
 
+#define __USE_MINGW_ANSI_STDIO 1
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
