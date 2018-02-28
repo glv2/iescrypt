@@ -357,34 +357,53 @@ char * get_temporary_filename(char *suffix)
 void make_tar_archive(char *archive_file, char *input_file, char* signature_file)
 {
   int r;
-  uint8_t *data;
+  uint8_t data[BUFFER_LENGTH];
   size_t data_length;
+  long int n;
   mtar_t archive;
+  FILE *input = fopen(input_file, "rb");
+  FILE *signature = fopen(signature_file, "rb");
 
+  CHECK_IF_FILE_OPEN_ERROR(input);
+  CHECK_IF_FILE_OPEN_ERROR(signature);
   r = mtar_open(&archive, archive_file, "w");
   CHECK_IF_TAR_ERROR(r);
-  read_file(&data, &data_length, input_file, 0);
-  if(data_length > 4294967295)
-  {
-    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __func__);
-    exit(EXIT_FAILURE);
-  }
+  r = fseek(input, 0, SEEK_END);
+  CHECK_IF_ERROR(r);
+  n = ftell(input);
+  CHECK_IF_ERROR(n);
+  data_length = (size_t) n;
+  r = fseek(input, 0, SEEK_SET);
+  CHECK_IF_ERROR(r);
   r = mtar_write_file_header(&archive, input_file, data_length);
   CHECK_IF_TAR_ERROR(r);
-  r = mtar_write_data(&archive, data, data_length);
-  CHECK_IF_TAR_ERROR(r);
-  free(data);
-  read_file(&data, &data_length, signature_file, 0);
-  if(data_length > 4294967295)
+  while(data_length > 0)
   {
-    fprintf(stderr, "Error: %s: files bigger than 4 GiB are not supported\n", __func__);
-    exit(EXIT_FAILURE);
+    n = (data_length < BUFFER_LENGTH) ? data_length : BUFFER_LENGTH;
+    read_data(input, data, n);
+    r = mtar_write_data(&archive, data, n);
+    CHECK_IF_TAR_ERROR(r);
+    data_length -= n;
   }
+  fclose(input);
+  r = fseek(signature, 0, SEEK_END);
+  CHECK_IF_ERROR(r);
+  n = ftell(signature);
+  CHECK_IF_ERROR(n);
+  data_length = (size_t) n;
+  r = fseek(signature, 0, SEEK_SET);
+  CHECK_IF_ERROR(r);
   r = mtar_write_file_header(&archive, signature_file, data_length);
   CHECK_IF_TAR_ERROR(r);
-  r = mtar_write_data(&archive, data, data_length);
-  CHECK_IF_TAR_ERROR(r);
-  free(data);
+  while(data_length > 0)
+  {
+    n = (data_length < BUFFER_LENGTH) ? data_length : BUFFER_LENGTH;
+    read_data(signature, data, n);
+    r = mtar_write_data(&archive, data, n);
+    CHECK_IF_TAR_ERROR(r);
+    data_length -= n;
+  }
+  fclose(signature);
   r = mtar_finalize(&archive);
   CHECK_IF_TAR_ERROR(r);
   r = mtar_close(&archive);
@@ -394,14 +413,20 @@ void make_tar_archive(char *archive_file, char *input_file, char* signature_file
 void extract_tar_archive(char *archive_file, char *output_file, char *signature_file)
 {
   int r;
-  uint8_t *data;
+  uint8_t data[BUFFER_LENGTH];
+  size_t data_length;
+  size_t n;
   mtar_t archive;
   mtar_header_t header_1;
   mtar_header_t header_2;
   mtar_header_t header_3;
   mtar_header_t *header_output;
   mtar_header_t *header_signature;
+  FILE *output = fopen(output_file, "wb");
+  FILE *signature = fopen(signature_file, "wb");
 
+  CHECK_IF_FILE_OPEN_ERROR(output);
+  CHECK_IF_FILE_OPEN_ERROR(signature);
   r = mtar_open(&archive, archive_file, "r");
   CHECK_IF_TAR_ERROR(r);
   r = mtar_read_header(&archive, &header_1);
@@ -430,20 +455,30 @@ void extract_tar_archive(char *archive_file, char *output_file, char *signature_
   }
   r = mtar_find(&archive, header_output->name, header_output);
   CHECK_IF_TAR_ERROR(r);
-  data = (uint8_t *) malloc(header_output->size);
-  CHECK_IF_MEMORY_ERROR(data);
-  r = mtar_read_data(&archive, data, header_output->size);
-  CHECK_IF_TAR_ERROR(r);
-  write_file(output_file, data, header_output->size);
-  free(data);
+  data_length = header_output->size;
+  while(data_length > 0)
+  {
+    n = (data_length < BUFFER_LENGTH) ? data_length : BUFFER_LENGTH;
+    r = mtar_read_data(&archive, data, n);
+    CHECK_IF_TAR_ERROR(r);
+    write_data(output, data, n);
+    data_length -= n;
+  }
+  fclose(output);
   r = mtar_find(&archive, header_signature->name, header_signature);
   CHECK_IF_TAR_ERROR(r);
-  data = (uint8_t *) malloc(header_signature->size);
-  CHECK_IF_MEMORY_ERROR(data);
-  r = mtar_read_data(&archive, data, header_signature->size);
+  data_length = header_signature->size;
+  while(data_length > 0)
+  {
+    n = (data_length < BUFFER_LENGTH) ? data_length : BUFFER_LENGTH;
+    r = mtar_read_data(&archive, data, n);
+    CHECK_IF_TAR_ERROR(r);
+    write_data(signature, data, n);
+    data_length -= n;
+  }
+  fclose(signature);
+  r = mtar_close(&archive);
   CHECK_IF_TAR_ERROR(r);
-  write_file(signature_file, data, header_signature->size);
-  free(data);
 }
 
 void hash_file(uint8_t *hash, char *input_file)
