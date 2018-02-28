@@ -102,31 +102,6 @@ You can build the standalone executable using the Makefile.
 make iescrypt-c
 #+END_SRC
 
-** Limitations
-
-The commands /sig-enc/, /dec-ver/, /sig-penc/ and /pdec-ver/ might
-fail on big files.
-
-However, these commands can be simulated using the other commands.
-
-/sig-enc/ is equivalent to:
-
-#+BEGIN_SRC shell
-iescrypt-c sig file file.sig signature-key
-tar -c -f file.tar file file.sig
-iescrypt-c enc file.tar encrypted-file encryption-key.pub
-rm file.sig file.tar
-#+END_SRC
-
-/dec-ver/ is equivalent to:
-
-#+BEGIN_SRC shell
-iescrypt-c dec encrypted-file file.tar encryption-key
-tar -x -f file.tar
-iescrypt-c ver file file.sig signature-key.pub
-rm file.sig file.tar
-#+END_SRC
-
 ** Tests
 
 There is a /test-c.sh/ shell script in the /tests/ directory to
@@ -246,3 +221,23 @@ poly1305.
 When using a command to simultaneously sign and encrypt a file, the
 encryption is done on a tar file containing the input file and the
 signature of the input file.
+
+=iescrypt sig-enc input output signature-key encryption-key.pub= is
+equivalent to:
+
+#+BEGIN_SRC shell
+iescrypt sig input input.sig signature-key
+tar -c -f input.tar input input.sig
+iescrypt enc input.tar output encryption-key.pub
+rm input.sig input.tar
+#+END_SRC
+
+=iescrypt dec-ver output input encryption-key signature-key.pub= is
+equivalent to:
+
+#+BEGIN_SRC shell
+iescrypt-c dec output input.tar encryption-key
+tar -x -f input.tar
+iescrypt-c ver input input.sig signature-key.pub
+rm input.sig input.tar
+#+END_SRC
