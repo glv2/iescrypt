@@ -104,13 +104,14 @@ static int raw_to_header(mtar_header_t *h, const mtar_raw_header_t *rh) {
   }
 
   /* Load raw header into header */
+  memset(h, 0, sizeof(*h));
   sscanf(rh->mode, "%o", &h->mode);
   sscanf(rh->owner, "%o", &h->owner);
-  sscanf(rh->size, "%lo", &h->size);
+  sscanf(rh->size, "%zo", &h->size);
   sscanf(rh->mtime, "%o", &h->mtime);
   h->type = rh->type;
-  strcpy(h->name, rh->name);
-  strcpy(h->linkname, rh->linkname);
+  strncpy(h->name, rh->name, sizeof(h->name) - 1);
+  strncpy(h->linkname, rh->linkname, sizeof(rh->linkname) - 1);
 
   return MTAR_ESUCCESS;
 }
@@ -121,13 +122,13 @@ static int header_to_raw(mtar_raw_header_t *rh, const mtar_header_t *h) {
 
   /* Load header into raw header */
   memset(rh, 0, sizeof(*rh));
-  sprintf(rh->mode, "%o", h->mode);
-  sprintf(rh->owner, "%o", h->owner);
-  sprintf(rh->size, "%lo", h->size);
-  sprintf(rh->mtime, "%o", h->mtime);
+  snprintf(rh->mode, sizeof(rh->mode), "%o", h->mode);
+  snprintf(rh->owner, sizeof(rh->owner), "%o", h->owner);
+  snprintf(rh->size, sizeof(rh->size), "%zo", h->size);
+  snprintf(rh->mtime, sizeof(rh->mtime), "%o", h->mtime);
   rh->type = h->type ? h->type : MTAR_TREG;
-  strcpy(rh->name, h->name);
-  strcpy(rh->linkname, h->linkname);
+  strncpy(rh->name, h->name, sizeof(rh->name) - 1);
+  strncpy(rh->linkname, h->linkname, sizeof(rh->linkname) - 1);
 
   /* Calculate and write checksum */
   chksum = checksum(rh);
@@ -335,7 +336,7 @@ int mtar_write_file_header(mtar_t *tar, const char *name, size_t size) {
   mtar_header_t h;
   /* Build header */
   memset(&h, 0, sizeof(h));
-  strcpy(h.name, name);
+  strncpy(h.name, name, sizeof(h.name) - 1);
   h.size = size;
   h.type = MTAR_TREG;
   h.mode = 0664;
@@ -348,7 +349,7 @@ int mtar_write_dir_header(mtar_t *tar, const char *name) {
   mtar_header_t h;
   /* Build header */
   memset(&h, 0, sizeof(h));
-  strcpy(h.name, name);
+  strncpy(h.name, name, sizeof(h.name) - 1);
   h.type = MTAR_TDIR;
   h.mode = 0775;
   /* Write header */

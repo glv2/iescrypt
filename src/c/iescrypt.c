@@ -199,7 +199,7 @@ void read_file(uint8_t **data, size_t *data_length, char *filename, size_t expec
   *data_length = (size_t) n;
   if((expected_length > 0) && (expected_length != *data_length))
   {
-    fprintf(stderr, "Error: %s: the file \"%s\" is not %lu bytes long\n", __func__, filename, expected_length);
+    fprintf(stderr, "Error: %s: the file \"%s\" is not %zu bytes long\n", __func__, filename, expected_length);
     exit(EXIT_FAILURE);
   }
   *data = (uint8_t *) malloc(*data_length);
