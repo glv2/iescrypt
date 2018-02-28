@@ -77,11 +77,11 @@ The tests require the [[https://common-lisp.net/project/fiveam/][fiveam]] librar
 (asdf:test-system "iescrypt")
 #+END_SRC
 
-There is also a /test.sh/ shell script in the /tests/ directory to
-test the standalone executable.
+There is also a /test-iescrypt.sh/ shell script in the /tests/
+directory to test the standalone executable.
 
 #+BEGIN_SRC shell
-tests/test.sh
+tests/test-iescrypt.sh path/to/iescrypt
 #+END_SRC
 
 * C version
@@ -104,11 +104,11 @@ make iescrypt-c
 
 ** Tests
 
-There is a /test-c.sh/ shell script in the /tests/ directory to
+There is a /test-iescrypt.sh/ shell script in the /tests/ directory to
 test the standalone executable.
 
 #+BEGIN_SRC shell
-tests/test-c.sh
+tests/test-iescrypt.sh path/to/iescrypt-c
 #+END_SRC
 
 * Commands of the standalone executable
