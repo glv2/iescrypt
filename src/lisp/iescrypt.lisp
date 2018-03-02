@@ -59,7 +59,6 @@
 (defun make-signature-public-key (public-key)
   (make-public-key :ed25519 :y public-key))
 (defconstant +digest+ :blake2)
-(defconstant +buffer-length+ 4096)
 
 
 ;;;
@@ -161,19 +160,6 @@ authentication key from a SHARED-SECRET and a SALT."
     (wipe data)
     (values cipher-key iv mac-key)))
 
-;; (defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
-;;   "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
-;; a message authentication code of what was written to OUTPUT-STREAM.
-;; The encryption parameters (key, initialization vector) are derived
-;; from the SHARED-SECRET and the SALT."
-;;   (multiple-value-bind (cipher-key iv mac-key)
-;;       (derive-keys shared-secret salt)
-;;     (with-authenticating-stream (mac-stream +mac+ mac-key)
-;;       (with-open-stream (out-stream (make-broadcast-stream output-stream mac-stream))
-;;         (with-encrypting-stream (cipher-stream out-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
-;;           (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
-;;       (wipe cipher-key iv mac-key)
-;;       (produce-mac mac-stream))))
 (defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
   "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
 a message authentication code of what was written to OUTPUT-STREAM.
@@ -181,28 +167,13 @@ The encryption parameters (key, initialization vector) are derived
 from the SHARED-SECRET and the SALT."
   (multiple-value-bind (cipher-key iv mac-key)
       (derive-keys shared-secret salt)
-    (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
-          (mac (make-mac +mac+ mac-key))
-          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
-          (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
-         ((zerop n) (progn (wipe cipher-key iv mac-key buffer) (produce-mac mac)))
-      (encrypt cipher buffer buffer :plaintext-end n)
-      (write-sequence buffer output-stream :end n)
-      (update-mac mac buffer :end n))))
+    (with-authenticating-stream (mac-stream +mac+ mac-key)
+      (with-open-stream (out-stream (make-broadcast-stream output-stream mac-stream))
+        (with-encrypting-stream (cipher-stream out-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
+          (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
+      (wipe cipher-key iv mac-key)
+      (produce-mac mac-stream))))
 
-;; (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
-;;   "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
-;; a message authentication code of what was read from INPUT-STREAM. The
-;; decryption parameters (key, initialization vector) are derived from
-;; the SHARED-SECRET and the SALT."
-;;   (multiple-value-bind (cipher-key iv mac-key)
-;;       (derive-keys shared-secret salt)
-;;     (with-authenticating-stream (mac-stream +mac+ mac-key)
-;;       (with-open-stream (in-stream (make-echo-stream input-stream mac-stream))
-;;         (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
-;;           (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
-;;       (wipe cipher-key iv mac-key)
-;;       (produce-mac mac-stream))))
 (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
   "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
 a message authentication code of what was read from INPUT-STREAM. The
@@ -210,14 +181,12 @@ decryption parameters (key, initialization vector) are derived from
 the SHARED-SECRET and the SALT."
   (multiple-value-bind (cipher-key iv mac-key)
       (derive-keys shared-secret salt)
-    (do* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
-          (mac (make-mac +mac+ mac-key))
-          (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8)))
-          (n (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
-         ((zerop n) (progn (wipe cipher-key iv mac-key buffer) (produce-mac mac)))
-      (update-mac mac buffer :end n)
-      (decrypt cipher buffer buffer :ciphertext-end n)
-      (write-sequence buffer output-stream :end n))))
+    (with-authenticating-stream (mac-stream +mac+ mac-key)
+      (with-open-stream (in-stream (make-echo-stream input-stream mac-stream))
+        (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
+          (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
+      (wipe cipher-key iv mac-key)
+      (produce-mac mac-stream))))
 
 
 ;;;
