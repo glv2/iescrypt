@@ -171,8 +171,7 @@ from the SHARED-SECRET and the SALT."
       (with-open-stream (out-stream (make-broadcast-stream output-stream mac-stream))
         (with-encrypting-stream (cipher-stream out-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
           (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
-      (wipe cipher-key iv mac-key)
-      (produce-mac mac-stream))))
+      (wipe cipher-key iv mac-key))))
 
 (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
   "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
@@ -185,8 +184,7 @@ the SHARED-SECRET and the SALT."
       (with-open-stream (in-stream (make-echo-stream input-stream mac-stream))
         (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
           (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
-      (wipe cipher-key iv mac-key)
-      (produce-mac mac-stream))))
+      (wipe cipher-key iv mac-key))))
 
 
 ;;;
