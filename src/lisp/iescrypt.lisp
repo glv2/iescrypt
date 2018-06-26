@@ -470,7 +470,7 @@ was made using the matching private key."
 
 (defun print-usage ()
   (format *error-output* "
-iescrypt 1.1
+iescrypt 1.2
 
 Usage: iescrypt <command> <arguments>
 
