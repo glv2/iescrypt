@@ -7,6 +7,7 @@ LISP ?= sbcl
 lisp_sources = \
 	iescrypt.asd \
 	src/lisp/iescrypt.lisp
+CFLAGS ?= -O3 -march=native -fPIC
 c_headers = \
 	src/c/microtar.h \
 	src/c/monocypher.h \
@@ -26,7 +27,7 @@ iescrypt: ${lisp_sources}
 		--eval "(uiop:quit)"
 
 iescrypt-c: ${c_headers} ${c_sources}
-	${CC} -O3 -march=native -DED25519_SHA512 -o iescrypt-c ${c_sources}
+	${CC} ${CFLAGS} -DED25519_SHA512 -o iescrypt-c ${c_sources}
 
 clean:
 	rm -f iescrypt iescrypt-c
