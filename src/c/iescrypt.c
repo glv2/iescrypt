@@ -645,12 +645,7 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   random_data(private_key, DH_KEY_LENGTH);
   crypto_x25519_public_key(parameter, private_key);
   random_data(salt, SALT_LENGTH);
-  r = crypto_x25519(shared_secret, private_key, public_key);
-  if(r == -1)
-  {
-    fprintf(stderr, "Error: %s: bad public key\n", __func__);
-    exit(EXIT_FAILURE);
-  }
+  crypto_x25519(shared_secret, private_key, public_key);
   write_data(output, salt, SALT_LENGTH);
   write_data(output, parameter, DH_KEY_LENGTH);
   r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH + MAC_LENGTH, SEEK_SET);
@@ -675,7 +670,6 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
   uint8_t computed_mac[MAC_LENGTH];
-  int r;
   FILE *input = fopen(input_file, "rb");
   FILE *output = fopen(output_file, "wb");
 
@@ -685,12 +679,7 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   read_data(input, salt, SALT_LENGTH);
   read_data(input, parameter, DH_KEY_LENGTH);
   read_data(input, mac, MAC_LENGTH);
-  r = crypto_x25519(shared_secret, private_key, parameter);
-  if(r == -1)
-  {
-    fprintf(stderr, "Error: %s: bad public key\n", __func__);
-    exit(EXIT_FAILURE);
-  }
+  crypto_x25519(shared_secret, private_key, parameter);
   ies_decrypt_stream(computed_mac, shared_secret, DH_KEY_LENGTH, salt, input, output);
   if(crypto_verify16(mac, computed_mac) == -1)
   {
