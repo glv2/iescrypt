@@ -5,7 +5,7 @@
 
 
 (defpackage :iescrypt
-  (:use :cl :archive :babel :ironclad :uiop)
+  (:use :cl :archive :babel :ironclad :uiop #+iescrypt-parallel :lparallel)
   (:export #:make-encryption-key-pair
            #:make-signing-key-pair
            #:encrypt-file-with-key
@@ -59,6 +59,8 @@
 (defun make-signature-public-key (public-key)
   (make-public-key :ed25519 :y public-key))
 (defconstant +digest+ :blake2)
+#+iescrypt-parallel
+(defparameter *iescrypt-threads* (cpus:get-number-of-processors))
 
 
 ;;;
@@ -160,6 +162,7 @@ authentication key from a SHARED-SECRET and a SALT."
     (wipe data)
     (values cipher-key iv mac-key)))
 
+#-iescrypt-parallel
 (defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
   "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
 a message authentication code of what was written to OUTPUT-STREAM.
@@ -173,6 +176,51 @@ from the SHARED-SECRET and the SALT."
           (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
       (wipe cipher-key iv mac-key))))
 
+#+iescrypt-parallel
+(defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
+  "Write the encryption of INPUT-STREAM to OUTPUT-STREAM and return
+a message authentication code of what was written to OUTPUT-STREAM.
+The encryption parameters (key, initialization vector) are derived
+from the SHARED-SECRET and the SALT."
+  (multiple-value-bind (cipher-key iv mac-key)
+      (derive-keys shared-secret salt)
+    (let* ((*kernel* (make-kernel *iescrypt-threads*))
+           (channel (make-channel))
+           (ciphers (make-array *iescrypt-threads*))
+           (buffers (make-array *iescrypt-threads*))
+           (results (make-array *iescrypt-threads*))
+           (mac (make-mac +mac+ mac-key))
+           (offset 0)
+           (task (lambda (i end offset)
+                   (let ((cipher (aref ciphers i))
+                         (buffer (aref buffers i)))
+                     (when (plusp end)
+                       (keystream-position cipher offset)
+                       (encrypt-in-place cipher buffer :end end))
+                     (setf (aref results i) end)))))
+      (dotimes (i *iescrypt-threads*)
+        (setf (aref ciphers i) (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
+        (setf (aref buffers i) (make-array 1048576 :element-type '(unsigned-byte 8))))
+      (loop
+        (dotimes (i *iescrypt-threads*)
+          (let* ((buffer (aref buffers i))
+                 (end (read-sequence buffer input-stream)))
+            (submit-task channel task i end offset)
+            (incf offset end)))
+        (dotimes (i *iescrypt-threads*)
+          (receive-result channel))
+        (dotimes (i *iescrypt-threads*)
+          (let ((buffer (aref buffers i))
+                (end (aref results i)))
+            (when (plusp end)
+              (write-sequence buffer output-stream :end end)
+              (update-mac mac buffer :end end))))
+        (when (some #'zerop results)
+          (return)))
+      (prog1 (produce-mac mac)
+        (wipe cipher-key iv mac-key)))))
+
+#-iescrypt-parallel
 (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
   "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
 a message authentication code of what was read from INPUT-STREAM. The
@@ -185,6 +233,50 @@ the SHARED-SECRET and the SALT."
         (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
           (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
       (wipe cipher-key iv mac-key))))
+
+#+iescrypt-parallel
+(defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
+  "Write the decryption of INPUT-STREAM to OUTPUT-STREAM and return
+a message authentication code of what was read from INPUT-STREAM. The
+decryption parameters (key, initialization vector) are derived from
+the SHARED-SECRET and the SALT."
+  (multiple-value-bind (cipher-key iv mac-key)
+      (derive-keys shared-secret salt)
+    (let* ((*kernel* (make-kernel *iescrypt-threads*))
+           (channel (make-channel))
+           (ciphers (make-array *iescrypt-threads*))
+           (buffers (make-array *iescrypt-threads*))
+           (results (make-array *iescrypt-threads*))
+           (mac (make-mac +mac+ mac-key))
+           (offset 0)
+           (task (lambda (i end offset)
+                   (let ((cipher (aref ciphers i))
+                         (buffer (aref buffers i)))
+                     (when (plusp end)
+                       (keystream-position cipher offset)
+                       (decrypt-in-place cipher buffer :end end))
+                     (setf (aref results i) end)))))
+      (dotimes (i *iescrypt-threads*)
+        (setf (aref ciphers i) (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
+        (setf (aref buffers i) (make-array 1048576 :element-type '(unsigned-byte 8))))
+      (loop
+        (dotimes (i *iescrypt-threads*)
+          (let* ((buffer (aref buffers i))
+                 (end (read-sequence buffer input-stream)))
+            (update-mac mac buffer :end end)
+            (submit-task channel task i end offset)
+            (incf offset end)))
+        (dotimes (i *iescrypt-threads*)
+          (receive-result channel))
+        (dotimes (i *iescrypt-threads*)
+          (let ((buffer (aref buffers i))
+                (end (aref results i)))
+            (when (plusp end)
+              (write-sequence buffer output-stream :end end))))
+        (when (some #'zerop results)
+          (return)))
+      (prog1 (produce-mac mac)
+        (wipe cipher-key iv mac-key)))))
 
 
 ;;;

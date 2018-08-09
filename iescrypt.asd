@@ -6,6 +6,9 @@
 
 (cl:in-package :asdf-user)
 
+;; Use several threads for encryption and decryption
+;;(cl:pushnew :iescrypt-parallel cl:*features*)
+
 ;; Redefine 'program-op' to actvate compression
 #+(and sbcl sb-core-compression)
 (defmethod perform ((o program-op) (c system))
@@ -17,7 +20,12 @@
   :version "1.2"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
-  :depends-on ("archive" "babel" "ironclad" "uiop")
+  :depends-on ("archive"
+               "babel"
+               "ironclad"
+               "uiop"
+               #+iescrypt-parallel "cl-cpus"
+               #+iescrypt-parallel "lparallel")
   :in-order-to ((test-op (test-op "iescrypt/tests")))
   :build-operation program-op
   :build-pathname "iescrypt"
