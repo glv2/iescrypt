@@ -59,6 +59,7 @@
 (defun make-signature-public-key (public-key)
   (make-public-key :ed25519 :y public-key))
 (defconstant +digest+ :blake2)
+(defparameter +buffer-length+ 1048576)
 #+iescrypt-parallel
 (defparameter *iescrypt-threads* (cpus:get-number-of-processors))
 
@@ -170,11 +171,16 @@ The encryption parameters (key, initialization vector) are derived
 from the SHARED-SECRET and the SALT."
   (multiple-value-bind (cipher-key iv mac-key)
       (derive-keys shared-secret salt)
-    (with-authenticating-stream (mac-stream +mac+ mac-key)
-      (with-open-stream (out-stream (make-broadcast-stream output-stream mac-stream))
-        (with-encrypting-stream (cipher-stream out-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
-          (copy-stream-to-stream input-stream cipher-stream :element-type '(unsigned-byte 8))))
-      (wipe cipher-key iv mac-key))))
+    (let* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
+           (mac (make-mac +mac+ mac-key))
+           (authenticated-cipher (make-authenticated-encryption-mode :etm :cipher cipher :mac mac))
+           (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8))))
+      (do ((end (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
+          ((zerop end))
+        (encrypt-in-place authenticated-cipher buffer :end end)
+        (write-sequence buffer output-stream :end end))
+      (wipe cipher-key iv mac-key)
+      (produce-tag authenticated-cipher))))
 
 #+iescrypt-parallel
 (defun ies-encrypt-stream (shared-secret salt input-stream output-stream)
@@ -200,7 +206,7 @@ from the SHARED-SECRET and the SALT."
                      (setf (aref results i) end)))))
       (dotimes (i *iescrypt-threads*)
         (setf (aref ciphers i) (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
-        (setf (aref buffers i) (make-array 1048576 :element-type '(unsigned-byte 8))))
+        (setf (aref buffers i) (make-array +buffer-length+ :element-type '(unsigned-byte 8))))
       (loop
         (dotimes (i *iescrypt-threads*)
           (let* ((buffer (aref buffers i))
@@ -228,11 +234,16 @@ decryption parameters (key, initialization vector) are derived from
 the SHARED-SECRET and the SALT."
   (multiple-value-bind (cipher-key iv mac-key)
       (derive-keys shared-secret salt)
-    (with-authenticating-stream (mac-stream +mac+ mac-key)
-      (with-open-stream (in-stream (make-echo-stream input-stream mac-stream))
-        (with-decrypting-stream (cipher-stream in-stream +cipher+ +cipher-mode+ cipher-key :initialization-vector iv)
-          (copy-stream-to-stream cipher-stream output-stream :element-type '(unsigned-byte 8))))
-      (wipe cipher-key iv mac-key))))
+    (let* ((cipher (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
+           (mac (make-mac +mac+ mac-key))
+           (authenticated-cipher (make-authenticated-encryption-mode :etm :cipher cipher :mac mac))
+           (buffer (make-array +buffer-length+ :element-type '(unsigned-byte 8))))
+      (do ((end (read-sequence buffer input-stream) (read-sequence buffer input-stream)))
+          ((zerop end))
+        (decrypt-in-place authenticated-cipher buffer :end end)
+        (write-sequence buffer output-stream :end end))
+      (wipe cipher-key iv mac-key)
+      (produce-tag authenticated-cipher))))
 
 #+iescrypt-parallel
 (defun ies-decrypt-stream (shared-secret salt input-stream output-stream)
@@ -258,7 +269,7 @@ the SHARED-SECRET and the SALT."
                      (setf (aref results i) end)))))
       (dotimes (i *iescrypt-threads*)
         (setf (aref ciphers i) (make-cipher +cipher+ :mode +cipher-mode+ :key cipher-key :initialization-vector iv))
-        (setf (aref buffers i) (make-array 1048576 :element-type '(unsigned-byte 8))))
+        (setf (aref buffers i) (make-array +buffer-length+ :element-type '(unsigned-byte 8))))
       (loop
         (dotimes (i *iescrypt-threads*)
           (let* ((buffer (aref buffers i))
