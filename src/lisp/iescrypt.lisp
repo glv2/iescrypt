@@ -59,7 +59,7 @@
 (defun make-signature-public-key (public-key)
   (make-public-key :ed25519 :y public-key))
 (defconstant +digest+ :blake2)
-(defparameter +buffer-length+ 1048576)
+(defparameter +buffer-length+ 65536)
 
 
 ;;;
