@@ -287,7 +287,9 @@ specified, and asked to the user otherwise."
                              (read-file-line passphrase-file)
                              (get-passphrase t)))
              (parameter (random-data +dh-key-length+))
-             (shared-secret (string-to-octets passphrase :encoding :utf-8))
+             (shared-secret (concatenate '(simple-array (unsigned-byte 8) (*))
+                                         parameter
+                                         (string-to-octets passphrase :encoding :utf-8)))
              (salt (random-data +salt-length+)))
         (write-sequence salt output-stream)
         (write-sequence parameter output-stream)
@@ -318,7 +320,9 @@ specified, and asked to the user otherwise."
         (let* ((passphrase (if passphrase-file
                                (read-file-line passphrase-file)
                                (get-passphrase nil)))
-               (shared-secret (string-to-octets passphrase :encoding :utf-8))
+               (shared-secret (concatenate '(simple-array (unsigned-byte 8) (*))
+                                           parameter
+                                           (string-to-octets passphrase :encoding :utf-8)))
                (computed-mac (ies-decrypt-stream shared-secret salt input-stream output-stream)))
           (wipe shared-secret)
           (or (constant-time-equal mac computed-mac)
@@ -481,7 +485,7 @@ was made using the matching private key."
 
 (defun print-usage ()
   (format *error-output* "
-iescrypt 1.2
+iescrypt 2.0
 
 Usage: iescrypt <command> <arguments>
 

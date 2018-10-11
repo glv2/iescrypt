@@ -695,7 +695,9 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
 
 void encrypt_file_with_passphrase(char *input_file, char *output_file, char* passphrase_file)
 {
-  uint8_t *shared_secret;
+  uint8_t *passphrase;
+  uint32_t passphrase_length;
+  uint8_t shared_secret[BUFFER_LENGTH];
   uint32_t shared_secret_length;
   uint8_t parameter[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
@@ -708,11 +710,11 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   CHECK_IF_FILE_OPEN_ERROR(output);
   if(passphrase_file != NULL)
   {
-    read_passphrase(&shared_secret, &shared_secret_length, passphrase_file);
+    read_passphrase(&passphrase, &passphrase_length, passphrase_file);
   }
   else
   {
-    get_passphrase(&shared_secret, &shared_secret_length, 1);
+    get_passphrase(&passphrase, &passphrase_length, 1);
   }
   random_data(parameter, DH_KEY_LENGTH);
   random_data(salt, SALT_LENGTH);
@@ -720,19 +722,25 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   write_data(output, parameter, DH_KEY_LENGTH);
   r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH + MAC_LENGTH, SEEK_SET);
   CHECK_IF_ERROR(r);
+  memcpy(shared_secret, parameter, DH_KEY_LENGTH);
+  memcpy(shared_secret + DH_KEY_LENGTH, passphrase, passphrase_length);
+  shared_secret_length = DH_KEY_LENGTH + passphrase_length;
   ies_encrypt_stream(mac, shared_secret, shared_secret_length, salt, input, output);
   r = fseek(output, SALT_LENGTH + DH_KEY_LENGTH, SEEK_SET);
   CHECK_IF_ERROR(r);
   write_data(output, mac, MAC_LENGTH);
+  crypto_wipe(passphrase, passphrase_length);
   crypto_wipe(shared_secret, shared_secret_length);
-  free(shared_secret);
+  free(passphrase);
   fclose(input);
   fclose(output);
 }
 
 void decrypt_file_with_passphrase(char *input_file, char *output_file, char* passphrase_file)
 {
-  uint8_t *shared_secret;
+  uint8_t *passphrase;
+  uint32_t passphrase_length;
+  uint8_t shared_secret[BUFFER_LENGTH];
   uint32_t shared_secret_length;
   uint8_t parameter[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
@@ -745,23 +753,27 @@ void decrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   CHECK_IF_FILE_OPEN_ERROR(output);
   if(passphrase_file != NULL)
   {
-    read_passphrase(&shared_secret, &shared_secret_length, passphrase_file);
+    read_passphrase(&passphrase, &passphrase_length, passphrase_file);
   }
   else
   {
-    get_passphrase(&shared_secret, &shared_secret_length, 0);
+    get_passphrase(&passphrase, &passphrase_length, 0);
   }
   read_data(input, salt, SALT_LENGTH);
   read_data(input, parameter, DH_KEY_LENGTH);
   read_data(input, mac, MAC_LENGTH);
+  memcpy(shared_secret, parameter, DH_KEY_LENGTH);
+  memcpy(shared_secret + DH_KEY_LENGTH, passphrase, passphrase_length);
+  shared_secret_length = DH_KEY_LENGTH + passphrase_length;
   ies_decrypt_stream(computed_mac, shared_secret, shared_secret_length, salt, input, output);
   if(crypto_verify16(mac, computed_mac) == -1)
   {
     fprintf(stderr, "Error: %s: invalid message authentication code\n", __func__);
     exit(EXIT_FAILURE);
   }
+  crypto_wipe(passphrase, passphrase_length);
   crypto_wipe(shared_secret, shared_secret_length);
-  free(shared_secret);
+  free(passphrase);
   fclose(input);
   fclose(output);
 }
@@ -893,7 +905,7 @@ void decrypt_file_with_passphrase_and_verify_signature(char *input_file, char *o
 void print_usage()
 {
   fprintf(stderr,
-          "\niescrypt 1.2\n\n"
+          "\niescrypt 2.0\n\n"
           "Usage: iescrypt-c <command> <arguments>\n\n"
           "Commands:\n\n"
           "  gen-enc <file>\n\n"
