@@ -29,5 +29,9 @@ iescrypt: ${lisp_sources}
 iescrypt-c: ${c_headers} ${c_sources}
 	${CC} ${CFLAGS} -DED25519_SHA512 -o iescrypt-c ${c_sources}
 
+check: iescrypt iescrypt-c
+	cd tests && ./test-iescrypt.sh ../iescrypt
+	cd tests && ./test-iescrypt.sh ../iescrypt-c
+
 clean:
 	rm -f iescrypt iescrypt-c

@@ -357,7 +357,7 @@ char * get_temporary_filename(char *suffix)
   return(filename);
 }
 
-void make_tar_archive(char *archive_file, char *input_file, char* signature_file)
+void make_tar_archive(char *archive_file, char *input_file, char *signature_file)
 {
   int r;
   uint8_t data[BUFFER_LENGTH];
@@ -627,7 +627,7 @@ void make_signing_key_pair(char *filename)
   free(filename_pub);
 }
 
-void encrypt_file_with_key(char *input_file, char *output_file, char* public_key_file)
+void encrypt_file_with_key(char *input_file, char *output_file, char *public_key_file)
 {
   uint8_t private_key[DH_KEY_LENGTH];
   uint8_t parameter[DH_KEY_LENGTH];
@@ -662,7 +662,7 @@ void encrypt_file_with_key(char *input_file, char *output_file, char* public_key
   fclose(output);
 }
 
-void decrypt_file_with_key(char *input_file, char *output_file, char* private_key_file)
+void decrypt_file_with_key(char *input_file, char *output_file, char *private_key_file)
 {
   uint8_t *private_key;
   size_t private_key_length;
@@ -694,7 +694,7 @@ void decrypt_file_with_key(char *input_file, char *output_file, char* private_ke
   fclose(output);
 }
 
-void encrypt_file_with_passphrase(char *input_file, char *output_file, char* passphrase_file)
+void encrypt_file_with_passphrase(char *input_file, char *output_file, char *passphrase_file)
 {
   uint8_t *passphrase;
   uint32_t passphrase_length;
@@ -737,7 +737,7 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char* pas
   fclose(output);
 }
 
-void decrypt_file_with_passphrase(char *input_file, char *output_file, char* passphrase_file)
+void decrypt_file_with_passphrase(char *input_file, char *output_file, char *passphrase_file)
 {
   uint8_t *passphrase;
   uint32_t passphrase_length;
@@ -834,7 +834,7 @@ void verify_file_signature(char *input_file, char *signature_file, char *public_
   }
 }
 
-void sign_and_encrypt_file_with_key(char *input_file, char *output_file, char *signature_private_key_file, char* encryption_public_key_file)
+void sign_and_encrypt_file_with_key(char *input_file, char *output_file, char *signature_private_key_file, char *encryption_public_key_file)
 {
   char *signature_file = (char *) malloc(strlen(input_file) + 5);
   char *archive_file = (char *) malloc(strlen(input_file) + 5);
@@ -866,7 +866,7 @@ void decrypt_file_with_key_and_verify_signature(char *input_file, char *output_f
   free(archive_file);
 }
 
-void sign_and_encrypt_file_with_passphrase(char *input_file, char *output_file, char *signature_private_key_file, char* passphrase_file)
+void sign_and_encrypt_file_with_passphrase(char *input_file, char *output_file, char *signature_private_key_file, char *passphrase_file)
 {
   char *signature_file = (char *) malloc(strlen(input_file) + 5);
   char *archive_file = (char *) malloc(strlen(input_file) + 5);

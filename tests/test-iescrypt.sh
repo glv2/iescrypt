@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 CURRDIR=${PWD}
 SCRIPTDIR=$(dirname "${BASH_SOURCE[0]}")
