@@ -1,5 +1,5 @@
 # This file is part of iescrypt
-# Copyright 2015-2018 Guillaume LE VAILLANT
+# Copyright 2015-2020 Guillaume LE VAILLANT
 # Distributed under the GNU GPL v3 or later.
 # See the file LICENSE for terms of use and distribution.
 
@@ -9,14 +9,14 @@ lisp_sources = \
 	src/lisp/iescrypt.lisp
 CFLAGS ?= -O3 -march=native -fPIC
 c_headers = \
-	src/c/microtar.h \
-	src/c/monocypher.h \
-	src/c/sha512.h
+	src/c/microtar/microtar.h \
+	src/c/monocypher/monocypher.h \
+	src/c/monocypher/sha512.h
 c_sources = \
 	src/c/iescrypt.c \
-	src/c/microtar.c \
-	src/c/monocypher.c \
-	src/c/sha512.c
+	src/c/microtar/microtar.c \
+	src/c/monocypher/monocypher.c \
+	src/c/monocypher/sha512.c
 
 all: iescrypt iescrypt-c
 

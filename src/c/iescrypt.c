@@ -1,6 +1,6 @@
 /*
  * This file is part of iescrypt
- * Copyright 2018 Guillaume LE VAILLANT
+ * Copyright 2018-2020 Guillaume LE VAILLANT
  * Distributed under the GNU GPL v3 or later.
  * See the file LICENSE for terms of use and distribution.
  */
@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "microtar.h"
-#include "monocypher.h"
+#include "microtar/microtar.h"
+#include "monocypher/monocypher.h"
 
 
 /*
