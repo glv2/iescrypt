@@ -7,6 +7,7 @@ LISP ?= sbcl
 lisp_sources = \
 	iescrypt.asd \
 	src/lisp/iescrypt.lisp
+
 CFLAGS ?= -O3 -march=native -fPIC
 c_headers = \
 	src/c/microtar/microtar.h \
@@ -29,9 +30,13 @@ iescrypt: ${lisp_sources}
 iescrypt-c: ${c_headers} ${c_sources}
 	${CC} ${CFLAGS} -DED25519_SHA512 -o iescrypt-c ${c_sources}
 
-check: iescrypt iescrypt-c
-	cd tests && ./test-iescrypt.sh ../iescrypt
-	cd tests && ./test-iescrypt.sh ../iescrypt-c
+check: check-lisp check-c
+
+check-lisp: iescrypt
+	tests/test-iescrypt.sh iescrypt
+
+check-c: iescrypt-c
+	tests/test-iescrypt.sh iescrypt-c
 
 clean:
 	rm -f iescrypt iescrypt-c
