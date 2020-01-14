@@ -2,3 +2,4 @@ iescrypt
 iescrypt.exe
 iescrypt-c
 iescrypt-c.exe
+src/iescrypt.o
