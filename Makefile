@@ -6,7 +6,7 @@
 LISP = sbcl
 
 CC = gcc
-# AR = ar
+AR = ar
 CFLAGS ?= -O3 -march=native -fPIC
 
 

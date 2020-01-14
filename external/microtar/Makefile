@@ -4,7 +4,7 @@
 # See the file LICENSE for terms of use and distribution.
 
 CC = gcc
-# AR = ar
+AR = ar
 CFLAGS ?= -O3 -march=native -fPIC
 
 static-library: libmicrotar.a
