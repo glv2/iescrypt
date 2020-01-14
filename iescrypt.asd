@@ -1,5 +1,5 @@
 ;;;; This file is part of iescrypt
-;;;; Copyright 2015-2018 Guillaume LE VAILLANT
+;;;; Copyright 2015-2020 Guillaume LE VAILLANT
 ;;;; Distributed under the GNU GPL v3 or later.
 ;;;; See the file LICENSE for terms of use and distribution.
 
@@ -23,8 +23,7 @@
   :build-pathname "iescrypt"
   :entry-point "iescrypt:main"
   :components ((:module "src"
-                :components ((:module "lisp"
-                              :components ((:file "iescrypt")))))))
+                :components ((:file "iescrypt")))))
 
 (defsystem "iescrypt/tests"
   :name "iescrypt/tests"

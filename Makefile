@@ -3,32 +3,32 @@
 # Distributed under the GNU GPL v3 or later.
 # See the file LICENSE for terms of use and distribution.
 
-LISP ?= sbcl
-lisp_sources = \
-	iescrypt.asd \
-	src/lisp/iescrypt.lisp
+LISP = sbcl
 
+CC = gcc
+# AR = ar
 CFLAGS ?= -O3 -march=native -fPIC
-c_headers = \
-	src/c/microtar/microtar.h \
-	src/c/monocypher/monocypher.h \
-	src/c/monocypher/sha512.h
-c_sources = \
-	src/c/iescrypt.c \
-	src/c/microtar/microtar.c \
-	src/c/monocypher/monocypher.c \
-	src/c/monocypher/sha512.c
+
 
 all: iescrypt iescrypt-c
 
-iescrypt: ${lisp_sources}
-	${LISP} \
-		--load "iescrypt.asd" \
-		--eval "(asdf:make \"iescrypt\")" \
-		--eval "(uiop:quit)"
 
-iescrypt-c: ${c_headers} ${c_sources}
-	${CC} ${CFLAGS} -DED25519_SHA512 -o iescrypt-c ${c_sources}
+iescrypt: iescrypt.asd src/iescrypt.lisp
+	$(LISP) --load "iescrypt.asd" --eval '(asdf:make "iescrypt")' --eval "(uiop:quit)"
+
+
+iescrypt-c: src/iescrypt.o external/microtar/libmicrotar.a external/monocypher/lib/libmonocypher.a
+	$(CC) $(LDFLAGS) -o $@ $^
+
+src/iescrypt.o: src/iescrypt.c
+	$(CC) $(CFLAGS) -I external/microtar -I external/monocypher/src -I external/monocypher/src/optional -o $@ -c $<
+
+external/microtar/libmicrotar.a:
+	$(MAKE) -C external/microtar static-library
+
+external/monocypher/lib/libmonocypher.a:
+	$(MAKE) -C external/monocypher USE_ED25519=true static-library
+
 
 check: check-lisp check-c
 
@@ -39,4 +39,6 @@ check-c: iescrypt-c
 	tests/test-iescrypt.sh iescrypt-c
 
 clean:
+	$(MAKE) -C external/microtar $@
+	$(MAKE) -C external/monocypher $@
 	rm -f iescrypt iescrypt-c
