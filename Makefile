@@ -13,14 +13,23 @@ all: iescrypt iescrypt-c
 
 
 iescrypt: iescrypt.asd src/iescrypt.lisp
-	$(LISP) --load "iescrypt.asd" --eval '(asdf:make "iescrypt")' --eval "(uiop:quit)"
+	$(LISP) \
+		--eval "(require :asdf)" \
+		--eval '(asdf:load-asd "iescrypt.asd")' \
+		--eval '(asdf:make "iescrypt")' \
+		--eval "(uiop:quit)"
 
 
 iescrypt-c: src/iescrypt.o external/microtar/libmicrotar.a external/monocypher/lib/libmonocypher.a
 	$(CC) $(LDFLAGS) -o $@ $^
 
 src/iescrypt.o: src/iescrypt.c
-	$(CC) $(CFLAGS) -I external/microtar -I external/monocypher/src -I external/monocypher/src/optional -o $@ -c $<
+	$(CC) \
+		$(CFLAGS) \
+		-I external/microtar \
+		-I external/monocypher/src \
+		-I external/monocypher/src/optional \
+		-o $@ -c $<
 
 external/microtar/libmicrotar.a:
 	$(MAKE) -C external/microtar static-library
