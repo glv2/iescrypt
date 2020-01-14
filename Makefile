@@ -15,7 +15,7 @@ all: iescrypt iescrypt-c
 iescrypt: iescrypt.asd src/iescrypt.lisp
 	$(LISP) \
 		--eval "(require :asdf)" \
-		--eval '(asdf:load-asd "iescrypt.asd")' \
+		--eval '(asdf:load-asd (truename "iescrypt.asd"))' \
 		--eval '(asdf:make "iescrypt")' \
 		--eval "(uiop:quit)"
 
