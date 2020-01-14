@@ -534,11 +534,9 @@ void ies_encrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_se
   uint8_t cipher_text[BUFFER_LENGTH];
   uint64_t counter = 0;
   size_t n;
-  //crypto_chacha_ctx cipher_ctx;
   crypto_poly1305_ctx mac_ctx;
 
   derive_keys(cipher_key, iv, mac_key, shared_secret, shared_secret_length, salt);
-  // crypto_chacha20_x_init(&cipher_ctx, cipher_key, iv);
   crypto_poly1305_init(&mac_ctx, mac_key);
   while(!feof(input))
   {
@@ -546,7 +544,6 @@ void ies_encrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_se
     CHECK_IF_FILE_ERROR(input);
     if(n > 0)
     {
-      //crypto_chacha20_encrypt(&cipher_ctx, cipher_text, plain_text, n);
       counter = crypto_xchacha20_ctr(cipher_text, plain_text, n, cipher_key, iv, counter);
       crypto_poly1305_update(&mac_ctx, cipher_text, n);
       write_data(output, cipher_text, n);
@@ -568,11 +565,9 @@ void ies_decrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_se
   uint8_t cipher_text[BUFFER_LENGTH];
   uint64_t counter = 0;
   size_t n;
-  //crypto_chacha_ctx cipher_ctx;
   crypto_poly1305_ctx mac_ctx;
 
   derive_keys(cipher_key, iv, mac_key, shared_secret, shared_secret_length, salt);
-  // crypto_chacha20_x_init(&cipher_ctx, cipher_key, iv);
   crypto_poly1305_init(&mac_ctx, mac_key);
   while(!feof(input))
   {
@@ -581,8 +576,7 @@ void ies_decrypt_stream(uint8_t *mac, uint8_t *shared_secret, uint32_t shared_se
     if(n > 0)
     {
       crypto_poly1305_update(&mac_ctx, cipher_text, n);
-      // crypto_chacha20_encrypt(&cipher_ctx, plain_text, cipher_text, n);
-      counter = crypto_xchacha20_ctr(cipher_text, plain_text, n, cipher_key, iv, counter);
+      counter = crypto_xchacha20_ctr(plain_text, cipher_text, n, cipher_key, iv, counter);
       write_data(output, plain_text, n);
     }
   }

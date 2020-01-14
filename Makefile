@@ -41,4 +41,4 @@ check-c: iescrypt-c
 clean:
 	$(MAKE) -C external/microtar $@
 	$(MAKE) -C external/monocypher $@
-	rm -f iescrypt iescrypt-c
+	rm -f iescrypt iescrypt-c src/iescrypt.o
