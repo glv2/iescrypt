@@ -6,7 +6,6 @@
 LISP = sbcl
 
 CC = gcc
-AR = ar
 CFLAGS ?= -O3 -march=native -fPIC
 
 
@@ -41,4 +40,7 @@ check-c: iescrypt-c
 clean:
 	$(MAKE) -C external/microtar $@
 	$(MAKE) -C external/monocypher $@
-	rm -f iescrypt iescrypt-c src/iescrypt.o
+	rm -f src/iescrypt.o
+
+mrproper: clean
+	rm -f iescrypt iescrypt-c
