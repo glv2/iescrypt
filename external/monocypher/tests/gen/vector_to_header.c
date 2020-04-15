@@ -73,6 +73,11 @@ int main(int argc, char** argv)
     int   c      = getchar();
     int   nb_vec = 0;
 
+    // seek first line
+    while (!is_digit(c) && c != ':' && c != EOF) {
+        c = getchar();
+    }
+
     while (c != EOF) {
         int size = 0;
         if (c == ':') {
@@ -113,4 +118,5 @@ int main(int argc, char** argv)
         printf("%s_%d_size, ", prefix, i);
     }
     printf("};\n");
+    return 0;
 }

@@ -9,7 +9,7 @@
 //
 // ------------------------------------------------------------------------
 //
-// Copyright (c) 2017-2019, Loup Vaillant
+// Copyright (c) 2017-2020, Loup Vaillant and Richard Walmsley
 // All rights reserved.
 //
 //
@@ -39,7 +39,7 @@
 //
 // ------------------------------------------------------------------------
 //
-// Written in 2017-2019 by Loup Vaillant
+// Written in 2017-2020 by Loup Vaillant and Richard Walmsley
 //
 // To the extent possible under law, the author(s) have dedicated all copyright
 // and related neighboring rights to this software to the public domain
@@ -287,6 +287,25 @@ static int test_x25519()
     return status;
 }
 
+static void elligator_dir(const vector in[], vector *out)
+{
+    crypto_hidden_to_curve(out->buf, in->buf);
+}
+
+static void elligator_inv(const vector in[], vector *out)
+{
+    const vector *point = in;
+    u8  tweak   = in[1].buf[0];
+    u8  failure = in[2].buf[0];
+    int check   = crypto_curve_to_hidden(out->buf, point->buf, tweak);
+    if ((u8)check != failure) {
+        fprintf(stderr, "Elligator inverse map: failure mismatch\n");
+    }
+    if (check) {
+        out->buf[0] = 0;
+    }
+}
+
 //////////////////////////////
 /// Self consistency tests ///
 //////////////////////////////
@@ -458,7 +477,7 @@ static int p_poly1305_overlap()
         crypto_poly1305(input+i, input + 16, POLY1305_BLOCK_SIZE, key);
         status |= memcmp(mac, input + i, 16);
     }
-    printf("%s: Poly1305 (overlaping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: Poly1305 (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -508,7 +527,7 @@ static int p_blake2b_overlap()
         crypto_blake2b(input+i, input + 64, BLAKE2B_BLOCK_SIZE);
         status |= memcmp(hash, input + i, 64);
     }
-    printf("%s: Blake2b (overlaping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: Blake2b (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -556,7 +575,7 @@ static int p_sha512_overlap()
         crypto_sha512(input+i, input + 64, SHA_512_BLOCK_SIZE);
         status |= memcmp(hash, input + i, 64);
     }
-    printf("%s: Sha512 (overlaping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: Sha512 (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -606,7 +625,7 @@ static int p_hmac_sha512_overlap()
         crypto_hmac_sha512(input+i, key, 32, input + 64, SHA_512_BLOCK_SIZE);
         status |= memcmp(hash, input + i, 64);
     }
-    printf("%s: HMAC SHA-512 (overlaping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: HMAC SHA-512 (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -656,7 +675,45 @@ static int p_argon2i_overlap()
     }
     free(work_area);
     free(clean_work_area);
-    printf("%s: Argon2i (overlaping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: Argon2i (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+// Tests that the shared key and secret key buffers of crypto_x25519 can
+// overlap.
+static int p_x25519_overlap()
+{
+    int status = 0;
+    FOR (i, 0, 62) {
+        u8 overlapping[94];
+        u8 separate[32];
+        RANDOM_INPUT(sk, 32);
+        RANDOM_INPUT(pk, 32);
+        memcpy(overlapping + 31, sk, 32);
+        crypto_x25519(overlapping + i, overlapping + 31, pk);
+        crypto_x25519(separate, sk, pk);
+        status |= memcmp(separate, overlapping + i, 32);
+    }
+    printf("%s: x25519 (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+// Tests that the shared key and secret key buffers of
+// crypto_key_exchange can overlap.
+static int p_key_exchange_overlap()
+{
+    int status = 0;
+    FOR (i, 0, 62) {
+        u8 overlapping[94];
+        u8 separate[32];
+        RANDOM_INPUT(sk, 32);
+        RANDOM_INPUT(pk, 32);
+        memcpy(overlapping + 31, sk, 32);
+        crypto_key_exchange(overlapping + i, overlapping + 31, pk);
+        crypto_key_exchange(separate, sk, pk);
+        status |= memcmp(separate, overlapping + i, 32);
+    }
+    printf("%s: key_exchange (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -799,6 +856,243 @@ static int p_aead()
     return status;
 }
 
+// Elligator direct mapping must ignore the most significant bits
+static int p_elligator_direct_msb()
+{
+    int status = 0;
+    FOR (i, 0, 20) {
+        RANDOM_INPUT(r, 32);
+        u8 r1[32];  memcpy(r1, r, 32);  r1[31] = (r[31] & 0x3f) | 0x00;
+        u8 r2[32];  memcpy(r2, r, 32);  r2[31] = (r[31] & 0x3f) | 0x40;
+        u8 r3[32];  memcpy(r3, r, 32);  r3[31] = (r[31] & 0x3f) | 0x80;
+        u8 r4[32];  memcpy(r4, r, 32);  r4[31] = (r[31] & 0x3f) | 0xc0;
+        u8 u [32];  crypto_hidden_to_curve(u , r );
+        u8 u1[32];  crypto_hidden_to_curve(u1, r1);
+        u8 u2[32];  crypto_hidden_to_curve(u2, r2);
+        u8 u3[32];  crypto_hidden_to_curve(u3, r3);
+        u8 u4[32];  crypto_hidden_to_curve(u4, r4);
+        status |= memcmp(u, u1, 32);
+        status |= memcmp(u, u2, 32);
+        status |= memcmp(u, u3, 32);
+        status |= memcmp(u, u4, 32);
+    }
+    printf("%s: elligator direct (msb)\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_elligator_direct_overlap()
+{
+    int status = 0;
+    FOR (i, 0, 62) {
+        u8 overlapping[94];
+        u8 separate[32];
+        RANDOM_INPUT(r, 32);
+        memcpy(overlapping + 31, r, 32);
+        crypto_hidden_to_curve(overlapping + i, overlapping + 31);
+        crypto_hidden_to_curve(separate, r);
+        status |= memcmp(separate, overlapping + i, 32);
+    }
+    printf("%s: elligator direct (overlapping i/o)\n",
+           status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_elligator_inverse_overlap()
+{
+    int status = 0;
+    FOR (i, 0, 62) {
+        u8 overlapping[94];
+        u8 separate[32];
+        RANDOM_INPUT(pk, 33);
+        u8 tweak = pk[32];
+        memcpy(overlapping + 31, pk, 32);
+        int a = crypto_curve_to_hidden(overlapping+i, overlapping+31, tweak);
+        int b = crypto_curve_to_hidden(separate, pk, tweak);
+        status |= a - b;
+        if (a == 0) {
+            // The buffers are the same only if written to to begin with
+            status |= memcmp(separate, overlapping + i, 32);
+        }
+    }
+    printf("%s: elligator inverse (overlapping i/o)\n",
+           status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_elligator_x25519()
+{
+    int status = 0;
+    int i = 0;
+    while (i < 64) {
+        RANDOM_INPUT(sk1, 32);
+        RANDOM_INPUT(sk2, 32);
+        u8 skc [32];  memcpy(skc, sk1, 32);  skc[0] &= 248;
+        u8 pks [32];  crypto_x25519_dirty_small(pks , sk1);
+        u8 pksc[32];  crypto_x25519_dirty_small(pksc, skc);
+        u8 pkf [32];  crypto_x25519_dirty_fast (pkf , sk1);
+        u8 pkfc[32];  crypto_x25519_dirty_fast (pkfc, skc);
+        u8 pk1 [32];  crypto_x25519_public_key (pk1 , sk1);
+
+        // Both dirty functions behave the same
+        status |= memcmp(pks, pkf, 32);
+
+        // Dirty functions behave cleanly if we clear the 3 msb first
+        status |= memcmp(pksc, pk1, 32);
+        status |= memcmp(pkfc, pk1, 32);
+
+        // Dirty functions behave the same as the clean one if the lsb
+        // are 0, differently if it is not
+        if ((sk1[0] & 7) == 0) { status |= memcmp(pk1, pkf, 32);      }
+        else                   { status |= memcmp(pk1, pkf, 32) == 0; }
+
+        // Maximise tweak diversity.
+        // We want to set the bits 1 (sign) and 6-7 (padding)
+        u8 tweak = (i & 1) + (i << 6);
+        u8 r[32];
+        if (crypto_curve_to_hidden(r, pkf, tweak)) {
+            continue; // retry untill success (doesn't increment the tweak)
+        }
+        // Verify that the tweak's msb are copied to the representative
+        status |= (tweak >> 6) ^ (r[31] >> 6);
+
+        // Round trip
+        u8 pkr[32];  crypto_hidden_to_curve(pkr, r);
+        status |= memcmp(pkr, pkf, 32);
+
+        // Dirty and safe keys are compatible
+        u8 e1 [32];  crypto_x25519(e1, sk2, pk1);
+        u8 e2 [32];  crypto_x25519(e2, sk2, pkr);
+        status |= memcmp(e1, e2, 32);
+        i++;
+    }
+    printf("%s: elligator x25519\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_elligator_key_pair()
+{
+    int status = 0;
+    FOR(i, 0, 32) {
+        RANDOM_INPUT(seed, 32);
+        RANDOM_INPUT(sk2 , 32);
+        u8 r  [32];
+        u8 sk1[32];  crypto_hidden_key_pair(r, sk1, seed);
+        u8 pkr[32];  crypto_hidden_to_curve(pkr, r);
+        u8 pk1[32];  crypto_x25519_public_key(pk1, sk1);
+        u8 e1 [32];  crypto_x25519(e1, sk2, pk1);
+        u8 e2 [32];  crypto_x25519(e2, sk2, pkr);
+        status |= memcmp(e1, e2, 32);
+    }
+
+    printf("%s: elligator key pair\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_elligator_key_pair_overlap()
+{
+    int status = 0;
+    FOR (i, 0, 94) {
+        u8 over[158];
+        u8 sep [ 64];
+        RANDOM_INPUT(s1, 32);
+        u8 *s2 = over + 63;
+        memcpy(s2, s1, 32);
+        crypto_hidden_key_pair(sep     , sep      + 32, s1);
+        crypto_hidden_key_pair(over + i, over + i + 32, s2);
+        status |= memcmp(sep, over + i, 64);
+    }
+
+    printf("%s: elligator key pair (overlapping i/o)\n",
+           status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_x25519_inverse()
+{
+    int status = 0;
+    const u8 base [32] = {9};
+    // check round trip
+    FOR (i, 0, 50) {
+        RANDOM_INPUT(sk, 32);
+        u8 pk   [32];
+        u8 blind[32];
+        crypto_x25519_public_key(pk, sk);
+        crypto_x25519_inverse(blind, sk, pk);
+        status |= memcmp(blind, base, 32);
+    }
+
+    // check cofactor clearing
+    // (Multiplying by a low order point yields zero
+    u8 low_order[4][32] = {
+        {0}, {1},
+        {0x5f, 0x9c, 0x95, 0xbc, 0xa3, 0x50, 0x8c, 0x24,
+         0xb1, 0xd0, 0xb1, 0x55, 0x9c, 0x83, 0xef, 0x5b,
+         0x04, 0x44, 0x5c, 0xc4, 0x58, 0x1c, 0x8e, 0x86,
+         0xd8, 0x22, 0x4e, 0xdd, 0xd0, 0x9f, 0x11, 0x57,},
+        {0xe0, 0xeb, 0x7a, 0x7c, 0x3b, 0x41, 0xb8, 0xae,
+         0x16, 0x56, 0xe3, 0xfa, 0xf1, 0x9f, 0xc4, 0x6a,
+         0xda, 0x09, 0x8d, 0xeb, 0x9c, 0x32, 0xb1, 0xfd,
+         0x86, 0x62, 0x05, 0x16, 0x5f, 0x49, 0xb8, 0x00,},
+    };
+    u8 zero[32] = {0};
+    FOR (i, 0, 32) {
+        u8 blind[32];
+        RANDOM_INPUT(sk, 32);
+        crypto_x25519_inverse(blind, sk, low_order[i%4]);
+        status |= memcmp(blind, zero, 32);
+    }
+    printf("%s: x25519_inverse\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+static int p_x25519_inverse_overlap()
+{
+    int status = 0;
+    FOR (i, 0, 62) {
+        u8 overlapping[94];
+        u8 separate[32];
+        RANDOM_INPUT(sk, 32);
+        RANDOM_INPUT(pk, 32);
+        memcpy(overlapping + 31, sk, 32);
+        crypto_x25519_inverse(overlapping + i, overlapping + 31, pk);
+        crypto_x25519_inverse(separate, sk, pk);
+        status |= memcmp(separate, overlapping + i, 32);
+    }
+    printf("%s: x25519 inverse (overlapping i/o)\n",
+           status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+int p_from_eddsa()
+{
+    int status = 0;
+    FOR (i, 0, 32) {
+        RANDOM_INPUT(ed_private, 32);
+        u8 ed_public[32];  crypto_sign_public_key   (ed_public, ed_private);
+        u8 x_private[32];  crypto_from_eddsa_private(x_private, ed_private);
+        u8 x_public1[32];  crypto_from_eddsa_public (x_public1, ed_public);
+        u8 x_public2[32];  crypto_x25519_public_key (x_public2, x_private);
+        status |= memcmp(x_public1, x_public2, 32);
+    }
+    printf("%s: from_eddsa\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
+int p_from_ed25519()
+{
+    int status = 0;
+    FOR (i, 0, 32) {
+        RANDOM_INPUT(ed_private, 32);
+        u8 ed_public[32];  crypto_ed25519_public_key  (ed_public, ed_private);
+        u8 x_private[32];  crypto_from_ed25519_private(x_private, ed_private);
+        u8 x_public1[32];  crypto_from_ed25519_public (x_public1, ed_public);
+        u8 x_public2[32];  crypto_x25519_public_key   (x_public2, x_private);
+        status |= memcmp(x_public1, x_public2, 32);
+    }
+    printf("%s: from_ed25519\n", status != 0 ? "FAILED" : "OK");
+    return status;
+}
+
 #define TEST(name, nb_inputs) vector_test(name, #name, nb_inputs, \
                                           nb_##name##_vectors,    \
                                           name##_vectors,         \
@@ -833,6 +1127,8 @@ int main(int argc, char *argv[])
     status |= TEST(ed_25519_pk   , 1);
     status |= TEST(ed_25519_check, 3);
     status |= test_x25519();
+    status |= TEST(elligator_dir , 1);
+    status |= TEST(elligator_inv , 3);
 
     printf("\nProperty based tests");
     printf("\n--------------------\n");
@@ -853,11 +1149,23 @@ int main(int argc, char *argv[])
     status |= p_hmac_sha512_overlap();
     status |= p_argon2i_easy();
     status |= p_argon2i_overlap();
+    status |= p_x25519_overlap();
+    status |= p_key_exchange_overlap();
     status |= p_eddsa_roundtrip();
     status |= p_eddsa_random();
     status |= p_eddsa_overlap();
     status |= p_eddsa_incremental();
     status |= p_aead();
-    printf("\n%s\n\n", status != 0 ? "SOME TESTS FAILED" : "All tests OK!");
+    status |= p_elligator_direct_msb();
+    status |= p_elligator_direct_overlap();
+    status |= p_elligator_inverse_overlap();
+    status |= p_elligator_x25519();
+    status |= p_elligator_key_pair();
+    status |= p_elligator_key_pair_overlap();
+    status |= p_x25519_inverse();
+    status |= p_x25519_inverse_overlap();
+    status |= p_from_eddsa();
+    status |= p_from_ed25519();
+     printf("\n%s\n\n", status != 0 ? "SOME TESTS FAILED" : "All tests OK!");
     return status;
 }

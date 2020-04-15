@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /usr/bin/env python3
 
 # This file is dual-licensed.  Choose whichever licence you want from
 # the two licences listed below.
@@ -11,8 +11,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Copyright (c) 2019, Loup Vaillant
-# Copyright (c) 2019, Fabio Scotoni
+# Copyright (c) 2020, Loup Vaillant
 # All rights reserved.
 #
 #
@@ -42,7 +41,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Written in 2019 by Loup Vaillant and Fabio Scotoni
+# Written in 2020 by Loup Vaillant
 #
 # To the extent possible under law, the author(s) have dedicated all copyright
 # and related neighboring rights to this software to the public domain
@@ -52,55 +51,59 @@
 # with this software.  If not, see
 # <https://creativecommons.org/publicdomain/zero/1.0/>
 
-set -e
+from elligator import can_curve_to_hash
+from elligator import curve_to_hash
+from elligator import fast_curve_to_hash
+from elligator import hash_to_curve
+from elligator import print_raw
 
-VERSION=`git describe --tags`
-FOLDER=monocypher-$VERSION
-TARBALL=$FOLDER.tar.gz
+from elligator_scalarmult import scalarmult
 
-# Generate documentation for users who don't have mandoc
-doc/man2html.sh
+from random import randrange
 
-# Delete the destination folder just to make sure everything is clean.
-# May be needed if we unpack the tarball in place for testing purposes,
-# then run the release script again.
-rm -rf $FOLDER
+def private_to_curve_and_hash(scalar, tweak):
+    cofactor      = scalar % 8
+    v_is_negative = tweak % 2 == 1;
+    msb           = (tweak // 2**6) * 2**254
+    u             = scalarmult(scalar, cofactor)
+    r1 = None
+    if can_curve_to_hash(u):
+        r1 = curve_to_hash(u, v_is_negative)
+    r2 = fast_curve_to_hash(u, v_is_negative)
+    if r1 != r2: raise ValueError('Incoherent hash_to_curve')
+    if r1 is None:
+        return u, None
+    if r1.val > 2**254: raise ValueError('Representative too big')
+    u2, v2 = hash_to_curve(r1)
+    if u2 != u: raise ValueError('Round trip failure')
+    return (u, r1.val + msb)
 
-# copy everything except ignored files to the
-rsync -ad --exclude-from=dist_ignore ./ $FOLDER
+# All possible failures
+for cofactor in range(8):
+    tweak = randrange(0, 256)
+    while True:
+        scalar = randrange(0, 2**253) * 8 + cofactor
+        u, r   = private_to_curve_and_hash(scalar, tweak)
+        if r is None:
+            u.print()
+            print(format(tweak, '02x') + ":")
+            print('ff:') # Failure
+            print('00:') # dummy value for the hash
+            print()
+            break
 
-# Replace version markers by the actual version number (from tags)
-find $FOLDER -type f -exec sed -i "s/__git__/$VERSION/g" \{\} \;
-
-# Remove the dist target from the makefile (no recursive releases!),
-# and the tests/vector.h target, which ships with the tarball.
-sed -i '/tests\/vectors.h:/,$d' $FOLDER/makefile
-
-# Remove contributor notes from the README
-sed -e '/Contributor notes/,$d' \
-    -e '1,/^---$/d' \
-    -i $FOLDER/README.md
-sed -e '1i\
-Monocypher\
-----------' \
-    -i $FOLDER/README.md
-
-# Make the actual tarball
-tar -cvzf $TARBALL $FOLDER
-
-# Remove the temporary folder
-rm -rf $FOLDER
-
-# Run tests in the tarball, to make sure we didn't screw up anything
-# important.  We're missing the TIS interpreter run, but that's a good
-# quick check.
-tar -xzf $TARBALL
-cd $FOLDER   # Extracting from the tarball, just to make sure
-tests/test.sh
-make clean
-make speed
-make speed-sodium
-make speed-tweetnacl
-make speed-hydrogen
-make speed-c25519
-make
+# All possible successes
+for cofactor in range(8):
+    for sign in range(2):
+        for msb in range(4):
+            tweak = sign + randrange(0, 32) * 2 + msb * 64
+            while True:
+                scalar = randrange(0, 2**253) * 8 + cofactor
+                u, r   = private_to_curve_and_hash(scalar, tweak)
+                if r is not None:
+                    u.print()
+                    print(format(tweak, '02x') + ":")
+                    print('00:') # Success
+                    print_raw(r)
+                    print()
+                    break

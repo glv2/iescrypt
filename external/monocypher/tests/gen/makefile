@@ -57,7 +57,7 @@ CFLAGS = -pedantic -Wall -Wextra
 VEC     = chacha20  hchacha20  xchacha20    ietf_chacha20 aead_ietf      \
           poly1305  blake2b    sha512       hmac_sha512   argon2i        \
           edDSA     edDSA_pk   ed_25519     ed_25519_pk   ed_25519_check \
-          x25519    x25519_pk  key_exchange
+          x25519    x25519_pk  key_exchange elligator_inv elligator_dir
 VEC2    = $(patsubst %, %.all.vec, $(VEC))
 HEADERS = $(patsubst %, %.h.vec  , $(VEC))
 VECTORS = ../vectors.h
@@ -67,6 +67,11 @@ all: $(VECTORS)
 clean:
 	rm -f *.out *.vec *.o
 	rm -f $(VECTORS)
+
+elligator_inv.vec: elligator-inverse.py elligator.py elligator_scalarmult.py
+	./$< >$@
+elligator_dir.vec: elligator-direct.py elligator.py
+	./$< >$@
 
 %.vec: %.out
 	./$< > $@
@@ -100,9 +105,9 @@ ed25519.o: ../externals/ed25519-donna/ed25519.c \
 vector_to_header.out: vector_to_header.c
 	$(CC) $(CFLAGS) $< -o $@
 
-chacha20.all.vec      : chacha20.vec    vectors/chacha20
-poly1305.all.vec      : poly1305.vec    vectors/poly1305
-x25519.all.vec        : x25519.vec      vectors/x25519
+chacha20.all.vec      : chacha20.vec      vectors/chacha20
+poly1305.all.vec      : poly1305.vec      vectors/poly1305
+x25519.all.vec        : x25519.vec        vectors/x25519
 x25519_pk.all.vec     : x25519_pk.vec
 hchacha20.all.vec     : hchacha20.vec
 xchacha20.all.vec     : xchacha20.vec
@@ -110,14 +115,16 @@ ietf_chacha20.all.vec : ietf_chacha20.vec
 aead_ietf.all.vec     : aead_ietf.vec
 blake2b.all.vec       : blake2b.vec
 sha512.all.vec        : sha512.vec
-hmac_sha512.all.vec   : hmac_sha512.vec vectors/hmac_sha512
-argon2i.all.vec       : argon2i.vec     vectors/argon2i
+hmac_sha512.all.vec   : hmac_sha512.vec   vectors/hmac_sha512
+argon2i.all.vec       : argon2i.vec       vectors/argon2i
 edDSA.all.vec         : edDSA.vec
 edDSA_pk.all.vec      : edDSA_pk.vec
 ed_25519.all.vec      : ed_25519.vec
 ed_25519_pk.all.vec   : ed_25519_pk.vec
-ed_25519_check.all.vec:                 vectors/ed_25519_check
-key_exchange.all.vec  :                 vectors/key_exchange
+ed_25519_check.all.vec:                   vectors/ed_25519_check
+key_exchange.all.vec  :                   vectors/key_exchange
+elligator_dir.all.vec : elligator_dir.vec vectors/elligator_dir
+elligator_inv.all.vec : elligator_inv.vec
 $(VEC2):
 	mkdir -p $(@D)
 	cat $^ > $@

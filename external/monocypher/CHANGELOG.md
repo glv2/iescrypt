@@ -1,9 +1,19 @@
+3.1.0
+-----
+2020/04/03
+
+- Added Elligator 2 mappings (hash to curve, curve to hash).
+- Added OPRF support (with scalar inversion).
+- Added Edwards25519 -> Curve25519 conversions
+
+
 3.0.0
 -----
-2019/12/09
+2020/01/19
 
 - Deprecated the incremental AEAD interface.
 - Deprecated the incremental Chacha20, added a direct interface.
+- Added IETF Chacha20 (96-bit nonce), as described in RFC 8439.
 - Moved deprecated interfaces to a separate `src/deprecated` folder.
 - Removed the `ED25519_SHA512` preprocessor flag.
 - `crypto_x25519()` and `crypto_key_exchange()` now return `void`.

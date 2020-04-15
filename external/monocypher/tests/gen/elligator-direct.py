@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /usr/bin/env python3
 
 # This file is dual-licensed.  Choose whichever licence you want from
 # the two licences listed below.
@@ -11,8 +11,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Copyright (c) 2019, Loup Vaillant
-# Copyright (c) 2019, Fabio Scotoni
+# Copyright (c) 2020, Loup Vaillant
 # All rights reserved.
 #
 #
@@ -42,7 +41,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Written in 2019 by Loup Vaillant and Fabio Scotoni
+# Written in 2020 by Loup Vaillant
 #
 # To the extent possible under law, the author(s) have dedicated all copyright
 # and related neighboring rights to this software to the public domain
@@ -52,55 +51,27 @@
 # with this software.  If not, see
 # <https://creativecommons.org/publicdomain/zero/1.0/>
 
-set -e
+from elligator import fe
+from elligator import curve_to_hash
+from elligator import hash_to_curve
+from elligator import fast_hash_to_curve
+from elligator import p
+from elligator import print_raw
+from random    import randrange
 
-VERSION=`git describe --tags`
-FOLDER=monocypher-$VERSION
-TARBALL=$FOLDER.tar.gz
+def direct(r1, padding):
+    q1 = hash_to_curve(r1)
+    q2 = fast_hash_to_curve(r1)
+    r2 = curve_to_hash(q1[0], q1[1].is_negative())
+    if q1 != q2: raise ValueError('Incorrect fast_hash_to_curve')
+    if r1 != r2: raise ValueError('Round trip failure')
+    print_raw(r1.val + padding * 2**254)
+    q1[0].print() # u coordinate only
+    print()
 
-# Generate documentation for users who don't have mandoc
-doc/man2html.sh
-
-# Delete the destination folder just to make sure everything is clean.
-# May be needed if we unpack the tarball in place for testing purposes,
-# then run the release script again.
-rm -rf $FOLDER
-
-# copy everything except ignored files to the
-rsync -ad --exclude-from=dist_ignore ./ $FOLDER
-
-# Replace version markers by the actual version number (from tags)
-find $FOLDER -type f -exec sed -i "s/__git__/$VERSION/g" \{\} \;
-
-# Remove the dist target from the makefile (no recursive releases!),
-# and the tests/vector.h target, which ships with the tarball.
-sed -i '/tests\/vectors.h:/,$d' $FOLDER/makefile
-
-# Remove contributor notes from the README
-sed -e '/Contributor notes/,$d' \
-    -e '1,/^---$/d' \
-    -i $FOLDER/README.md
-sed -e '1i\
-Monocypher\
-----------' \
-    -i $FOLDER/README.md
-
-# Make the actual tarball
-tar -cvzf $TARBALL $FOLDER
-
-# Remove the temporary folder
-rm -rf $FOLDER
-
-# Run tests in the tarball, to make sure we didn't screw up anything
-# important.  We're missing the TIS interpreter run, but that's a good
-# quick check.
-tar -xzf $TARBALL
-cd $FOLDER   # Extracting from the tarball, just to make sure
-tests/test.sh
-make clean
-make speed
-make speed-sodium
-make speed-tweetnacl
-make speed-hydrogen
-make speed-c25519
-make
+direct(fe(0), 0) # representative 0 maps to point (0, 0)
+direct(fe(0), 1) # representative 0 maps to point (0, 0)
+direct(fe(0), 2) # representative 0 maps to point (0, 0)
+direct(fe(0), 3) # representative 0 maps to point (0, 0)
+for i in range(50):
+    direct(fe(randrange(0, (p-1)/2)), i % 4)

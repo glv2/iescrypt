@@ -57,7 +57,10 @@
 /// Utilities ///
 /////////////////
 #define FOR(i, min, max)     for (size_t i = min; i < max; i++)
+#define COPY(dst, src, size) FOR(i, 0, size) (dst)[i] = (src)[i]
+#define ZERO(buf, size)      FOR(i, 0, size) (buf)[i] = 0
 #define WIPE_CTX(ctx)        crypto_wipe(ctx   , sizeof(*(ctx)))
+#define WIPE_BUFFER(buffer)  crypto_wipe(buffer, sizeof(buffer))
 #define MIN(a, b)            ((a) <= (b) ? (a) : (b))
 #define ALIGN(x, block_size) ((~(x) + 1) & ((block_size) - 1))
 typedef uint8_t u8;
@@ -159,12 +162,10 @@ static void sha512_compress(crypto_sha512_ctx *ctx)
 static void sha512_set_input(crypto_sha512_ctx *ctx, u8 input)
 {
     if (ctx->input_idx == 0) {
-        FOR (i, 0, 16) {
-            ctx->input[i] = 0;
-        }
+        ZERO(ctx->input, 16);
     }
-    size_t word = ctx->input_idx / 8;
-    size_t byte = ctx->input_idx % 8;
+    size_t word = ctx->input_idx >> 3;
+    size_t byte = ctx->input_idx &  7;
     ctx->input[word] |= (u64)input << (8 * (7 - byte));
 }
 
@@ -243,9 +244,7 @@ void crypto_sha512_final(crypto_sha512_ctx *ctx, u8 hash[64])
     // compress penultimate block (if any)
     if (ctx->input_idx > 111) {
         sha512_compress(ctx);
-        FOR(i, 0, 14) {
-            ctx->input[i] = 0;
-        }
+        ZERO(ctx->input, 14);
     }
     // compress last block
     ctx->input[14] = ctx->input_size[0];
@@ -393,4 +392,12 @@ int crypto_ed25519_check(const u8  signature [64],
     crypto_ed25519_check_init  (actx, signature, public_key);
     crypto_ed25519_check_update(actx, message, message_size);
     return crypto_ed25519_check_final(actx);
+}
+
+void crypto_from_ed25519_private(u8 x25519[32], const u8 eddsa[32])
+{
+    u8 a[64];
+    crypto_sha512(a, eddsa, 32);
+    COPY(x25519, a, 32);
+    WIPE_BUFFER(a);
 }
