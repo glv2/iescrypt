@@ -569,6 +569,7 @@ Commands:
 
 (defun main (&optional (args (command-line-arguments)))
   "Entry point for standalone program."
+  (setf *prng* (make-prng :os))
   (handler-case
       (let ((nargs (length args)))
         (when (plusp nargs)
