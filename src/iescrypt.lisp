@@ -1,5 +1,5 @@
 ;;;; This file is part of iescrypt
-;;;; Copyright 2015-2018 Guillaume LE VAILLANT
+;;;; Copyright 2015-2020 Guillaume LE VAILLANT
 ;;;; Distributed under the GNU GPL v3 or later.
 ;;;; See the file LICENSE for terms of use and distribution.
 
@@ -485,7 +485,7 @@ was made using the matching private key."
 
 (defun print-usage ()
   (format *error-output* "
-iescrypt 2.1
+iescrypt 2.2
 
 Usage: iescrypt <command> <arguments>
 
