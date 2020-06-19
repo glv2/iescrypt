@@ -907,7 +907,7 @@ void decrypt_file_with_passphrase_and_verify_signature(char *input_file, char *o
 void print_usage()
 {
   fprintf(stderr,
-          "\niescrypt 2.2\n\n"
+          "\niescrypt 2.3\n\n"
           "Usage: iescrypt-c <command> <arguments>\n\n"
           "Commands:\n\n"
           "  gen-enc <file>\n\n"

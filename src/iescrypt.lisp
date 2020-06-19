@@ -485,7 +485,7 @@ was made using the matching private key."
 
 (defun print-usage ()
   (format *error-output* "
-iescrypt 2.2
+iescrypt 2.3
 
 Usage: iescrypt <command> <arguments>
 

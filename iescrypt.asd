@@ -14,7 +14,7 @@
 (defsystem "iescrypt"
   :name "iescrypt"
   :description "Tool to encrypt and decrypt files"
-  :version "2.2"
+  :version "2.3"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
   :depends-on ("archive" "babel" "ironclad" "uiop")
@@ -28,7 +28,7 @@
 (defsystem "iescrypt/tests"
   :name "iescrypt/tests"
   :description "Tests for iescrypt"
-  :version "2.2"
+  :version "2.3"
   :author "Guillaume LE VAILLANT"
   :license "GPL-3"
   :depends-on ("fiveam" "iescrypt" "uiop")
