@@ -286,7 +286,7 @@ specified, and asked to the user otherwise."
       (let* ((passphrase (if passphrase-file
                              (read-file-line passphrase-file)
                              (get-passphrase t)))
-             (parameter (random-data +dh-key-length+))
+             (parameter (get-dh-public-key (nth-value 1 (generate-dh-key-pair))))
              (shared-secret (concatenate '(simple-array (unsigned-byte 8) (*))
                                          parameter
                                          (string-to-octets passphrase :encoding :utf-8)))

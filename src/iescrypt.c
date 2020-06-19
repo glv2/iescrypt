@@ -699,6 +699,7 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char *pas
   uint32_t passphrase_length;
   uint8_t shared_secret[BUFFER_LENGTH];
   uint32_t shared_secret_length;
+  uint8_t private_key[DH_KEY_LENGTH];
   uint8_t parameter[DH_KEY_LENGTH];
   uint8_t salt[SALT_LENGTH];
   uint8_t mac[MAC_LENGTH];
@@ -716,7 +717,8 @@ void encrypt_file_with_passphrase(char *input_file, char *output_file, char *pas
   {
     get_passphrase(&passphrase, &passphrase_length, 1);
   }
-  random_data(parameter, DH_KEY_LENGTH);
+  random_data(private_key, DH_KEY_LENGTH);
+  crypto_x25519_public_key(parameter, private_key);
   random_data(salt, SALT_LENGTH);
   write_data(output, salt, SALT_LENGTH);
   write_data(output, parameter, DH_KEY_LENGTH);
