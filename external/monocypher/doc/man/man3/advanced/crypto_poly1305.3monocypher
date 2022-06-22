@@ -10,7 +10,7 @@
 .\"
 .\" Copyright (c) 2017-2019 Loup Vaillant
 .\" Copyright (c) 2017-2018 Michael Savage
-.\" Copyright (c) 2017-2020 Fabio Scotoni
+.\" Copyright (c) 2017-2021 Fabio Scotoni
 .\" All rights reserved.
 .\"
 .\"
@@ -40,7 +40,7 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Written in 2017-2020 by Loup Vaillant, Michael Savage and Fabio Scotoni
+.\" Written in 2017-2021 by Loup Vaillant, Michael Savage and Fabio Scotoni
 .\"
 .\" To the extent possible under law, the author(s) have dedicated all copyright
 .\" and related neighboring rights to this software to the public domain
@@ -50,7 +50,7 @@
 .\" with this software.  If not, see
 .\" <https://creativecommons.org/publicdomain/zero/1.0/>
 .\"
-.Dd March 31, 2020
+.Dd June 11, 2021
 .Dt CRYPTO_POLY1305 3MONOCYPHER
 .Os
 .Sh NAME
@@ -89,7 +89,7 @@ Poly1305 is a one-time message authentication code.
 .Dq One-time
 means the authentication key can be used only once.
 .Sy This makes Poly1305 easy to misuse .
-On the other hand, Poly1305 is fast, and provably secure if used
+On the other hand, Poly1305 is fast and provably secure if used
 correctly.
 .Pp
 Poly1305 is a low-level primitive.
@@ -99,7 +99,7 @@ Consider using authenticated encryption, implemented by
 The arguments are:
 .Bl -tag -width Ds
 .It Fa mac
-The authentication code.
+The message authentication code.
 .It Fa key
 The secret authentication key.
 Use only once per message.
@@ -130,7 +130,7 @@ to compare the received MAC to the output
 initialises a context.
 .Fa key
 should be wiped once the context is initialised.
-Then,
+Then
 .Fn crypto_poly1305_update
 authenticates the message chunk by chunk.
 Once the message is entirely processed,
@@ -215,7 +215,7 @@ Use authenticated encryption instead; see
 .Xr crypto_lock 3monocypher .
 If you are certain you do not want encryption, refer to
 .Xr crypto_blake2b 3monocypher
-on how to use Blake2b to generate message authentication codes.
+on how to use BLAKE2b to generate message authentication codes.
 .Ss Authentication key requirements
 Poly1305 is a
 .Em one-time
@@ -244,7 +244,7 @@ That chunk must be
 .Em dedicated
 to the authentication key:
 if it is reused to encrypt the message itself, the attacker may recover
-that chunk by guessing the message, then forge arbitrary messages.
+that chunk by guessing the message then forge arbitrary messages.
 .Pp
 To get this right, you need a session key, a
 .Em unique
@@ -261,13 +261,13 @@ This is the approach used by
 Use
 .Xr crypto_verify16 3monocypher
 to compare message authentication codes.
-Avoid standard buffer comparison functions.
-They may not run in constant time, enabling an attacker to exploit timing
+Avoid standard buffer comparison functions:
+they may not run in constant time, enabling an attacker to exploit timing
 attacks to recover the MAC.
 .Pp
 The authentication key should be wiped with
 .Xr crypto_wipe 3monocypher
 after use.
 .Pp
-The incremental interface automatically wipes its context when finished
+The incremental interface automatically wipes its context when finished,
 so users do not need to do it themselves.

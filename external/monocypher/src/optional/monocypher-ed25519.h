@@ -56,6 +56,12 @@
 
 #include "monocypher.h"
 
+#ifdef MONOCYPHER_CPP_NAMESPACE
+namespace MONOCYPHER_CPP_NAMESPACE {
+#elif defined(__cplusplus)
+extern "C" {
+#endif
+
 ////////////////////////
 /// Type definitions ///
 ////////////////////////
@@ -138,5 +144,8 @@ void crypto_ed25519_check_init(crypto_check_ctx_abstract *ctx,
 void crypto_from_ed25519_private(uint8_t x25519[32], const uint8_t eddsa[32]);
 #define crypto_from_ed25519_public crypto_from_eddsa_public
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ED25519_H

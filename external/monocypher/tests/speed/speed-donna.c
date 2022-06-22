@@ -9,7 +9,7 @@
 //
 // ------------------------------------------------------------------------
 //
-// Copyright (c) 2017-2020, Loup Vaillant
+// Copyright (c) 2020, Loup Vaillant
 // All rights reserved.
 //
 //
@@ -39,7 +39,7 @@
 //
 // ------------------------------------------------------------------------
 //
-// Written in 2017-2020 by Loup Vaillant
+// Written in 2020 by Loup Vaillant
 //
 // To the extent possible under law, the author(s) have dedicated all copyright
 // and related neighboring rights to this software to the public domain
@@ -49,58 +49,44 @@
 // with this software.  If not, see
 // <https://creativecommons.org/publicdomain/zero/1.0/>
 
-// Transforms a test vector file (from stdin) into a C header.
+#include "speed.h"
+#include "ed25519.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stddef.h>
-#include <assert.h>
-
-#define FOR(i, start, end) for (size_t i = (start); i < (end); i++)
-
-static int is_digit(int c)
+static u64 edDSA_sign(void)
 {
-    return (c >= '0' && c <= '9')
-        || (c >= 'a' && c <= 'f')
-        || (c >= 'A' && c <= 'F');
+    u8 pk       [32];
+    u8 signature[64];
+    RANDOM_INPUT(sk     , 32);
+    RANDOM_INPUT(message, 64);
+    ed25519_publickey(sk, pk);
+
+    TIMING_START {
+        ed25519_sign(message, 64, sk, pk, signature);
+    }
+    TIMING_END;
 }
 
-int main(int argc, char** argv)
+static u64 edDSA_check(void)
 {
-    if (argc != 2) {
-        fprintf(stderr, "Wrong use of vector transformer. Give one argument\n");
-        return 1;
-    }
+    u8 pk       [32];
+    u8 signature[64];
+    RANDOM_INPUT(sk     , 32);
+    RANDOM_INPUT(message, 64);
+    ed25519_publickey(sk, pk);
+    ed25519_sign(message, 64, sk, pk, signature);
 
-    char  *prefix = argv[1];
-    int    c      = getchar();
-    size_t nb_vec = 0;
-
-    printf("static const char *%s_vectors[]={\n", prefix);
-
-    // seek first line
-    while (!is_digit(c) && c != ':' && c != EOF) {
-        c = getchar();
-    }
-
-    while (c != EOF) {
-        printf("  \"");
-        while (c != ':' && c != EOF) {
-            printf("%c", (char)c);
-            c = getchar();
+    TIMING_START {
+        if (ed25519_sign_open(message, 64, pk, signature)) {
+            printf("Donna verification failed\n");
         }
-        printf("\",\n");
-        c = getchar();
-
-        // seek next line
-        while (!is_digit(c) && c != ':' && c != EOF) {
-            c = getchar();
-        }
-        nb_vec++;
     }
-    printf("};\n");
-    printf("static size_t nb_%s_vectors=%zu;\n", prefix, nb_vec);
+    TIMING_END;
+}
 
+int main()
+{
+    print("EdDSA(sign) ",edDSA_sign() , "signatures per second");
+    print("EdDSA(check)",edDSA_check(), "checks     per second");
+    printf("\n");
     return 0;
 }

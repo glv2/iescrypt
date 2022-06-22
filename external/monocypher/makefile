@@ -70,6 +70,7 @@ endif
         install install-doc pkg-config-libhydrogen                     \
         check test ctgrind                                             \
         speed speed-sodium speed-tweetnacl speed-hydrogen speed-c25519 \
+        speed-donna                                                    \
         clean uninstall                                                \
         dist
 
@@ -86,7 +87,8 @@ install: library src/monocypher.h monocypher.pc install-doc
 
 install-doc:
 	mkdir -p $(DESTDIR)/$(MANDIR)
-	cp -PR doc/man/man3/*.3monocypher $(DESTDIR)/$(MANDIR)
+	cp -PR doc/man/man3/*.3monocypher          $(DESTDIR)/$(MANDIR)
+	cp -PR doc/man/man3/advanced/*.3monocypher $(DESTDIR)/$(MANDIR)
 ifdef USE_ED25519
 	cp -PR doc/man/man3/optional/*.3monocypher $(DESTDIR)/$(MANDIR)
 endif
@@ -120,7 +122,8 @@ speed-sodium   : speed-sodium.out
 speed-tweetnacl: speed-tweetnacl.out
 speed-hydrogen : speed-hydrogen.out
 speed-c25519   : speed-c25519.out
-test test-legacy speed speed-sodium speed-tweetnacl speed-hydrogen speed-c25519:
+speed-donna    : speed-donna.out
+test test-legacy speed speed-sodium speed-tweetnacl speed-hydrogen speed-c25519 speed-donna:
 	./$<
 
 ctgrind: ctgrind.out
@@ -185,6 +188,12 @@ lib/speed-hydrogen.o:$(SPEED)/speed-hydrogen.c $(TEST_COMMON) $(SPEED)/speed.h
             `pkg-config --cflags libhydrogen` \
             -fPIC -c -o $@ $<
 
+lib/speed-donna.o:$(SPEED)/speed-donna.c $(TEST_COMMON) $(SPEED)/speed.h
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS)                                                      \
+            -I src -I src/optional -I tests -I tests/externals/ed25519-donna \
+            -fPIC -c -o $@ $<
+
 C25519=         c25519 edsign ed25519 morph25519 fprime f25519 sha512
 C25519_H=       $(patsubst %, tests/externals/c25519/%.h, $(C25519))
 C25519_OBJECTS= $(patsubst %, lib/c25519/%.o,             $(C25519))
@@ -206,6 +215,15 @@ lib/speed-c25519.o:$(SPEED)/speed-c25519.c \
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -I tests -I tests/externals/c25519 -c -o $@ $<
 
+lib/speed-ed25519.o: tests/externals/ed25519-donna/ed25519.c \
+           $(wildcard tests/externals/ed25519-donna/*.h)
+	$(CC) $(CFLAGS) -c $< -o$@            \
+            -I src                            \
+            -DUSE_MONOCYPHER                  \
+            -DED25519_CUSTOMHASH              \
+            -DED25519_TEST                    \
+            -DED25519_NO_INLINE_ASM           \
+            -DED25519_FORCE_32BIT
 
 # test & speed executables
 TEST_OBJ=  lib/utils.o lib/monocypher.o
@@ -230,7 +248,8 @@ lib/tweetnacl.o: tests/externals/tweetnacl/tweetnacl.c \
 	$(CC) $(CFLAGS) -c -o $@ $<
 speed-tweetnacl.out: lib/speed-tweetnacl.o lib/tweetnacl.o lib/utils.o
 speed-c25519.out   : lib/speed-c25519.o $(C25519_OBJECTS) lib/utils.o
-speed-tweetnacl.out speed-c25519.out:
+speed-donna.out    : lib/speed-donna.o lib/speed-ed25519.o lib/utils.o lib/monocypher.o
+speed-tweetnacl.out speed-c25519.out speed-donna.out:
 	$(CC) $(CFLAGS) -o $@ $^
 
 tests/vectors.h:

@@ -12,6 +12,7 @@
 # ------------------------------------------------------------------------
 #
 # Copyright (c) 2020, Loup Vaillant
+# Copyright (c) 2020, Fabio Scotoni
 # All rights reserved.
 #
 #
@@ -41,7 +42,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Written in 2020 by Loup Vaillant
+# Written in 2020 by Loup Vaillant and Fabio Scotoni
 #
 # To the extent possible under law, the author(s) have dedicated all copyright
 # and related neighboring rights to this software to the public domain
@@ -54,29 +55,47 @@
 from elligator import can_curve_to_hash
 from elligator import curve_to_hash
 from elligator import fast_curve_to_hash
+from elligator import fe
 from elligator import hash_to_curve
 from elligator import print_raw
 
 from elligator_scalarmult import scalarmult
 
 from random import randrange
+from random import seed
 
-def private_to_curve_and_hash(scalar, tweak):
-    cofactor      = scalar % 8
+def redundant_curve_to_hash(u, tweak):
     v_is_negative = tweak % 2 == 1;
-    msb           = (tweak // 2**6) * 2**254
-    u             = scalarmult(scalar, cofactor)
     r1 = None
     if can_curve_to_hash(u):
         r1 = curve_to_hash(u, v_is_negative)
     r2 = fast_curve_to_hash(u, v_is_negative)
     if r1 != r2: raise ValueError('Incoherent hash_to_curve')
+    return r1
+
+def private_to_curve_and_hash(scalar, tweak):
+    cofactor      = scalar % 8
+    msb           = (tweak // 2**6) * 2**254
+    u             = scalarmult(scalar, cofactor)
+    r1 = redundant_curve_to_hash(u, tweak)
     if r1 is None:
         return u, None
     if r1.val > 2**254: raise ValueError('Representative too big')
     u2, v2 = hash_to_curve(r1)
     if u2 != u: raise ValueError('Round trip failure')
     return (u, r1.val + msb)
+
+# Make test vector generation deterministic, the actual randomness does
+# not matter here since these are just tests.
+seed(12345)
+
+# Zero
+for tweak in range(2):
+    print_raw(0)
+    print(format(tweak, '02x') + ":")
+    print('00:') # Success
+    redundant_curve_to_hash(fe(0), tweak).print()
+    print()
 
 # All possible failures
 for cofactor in range(8):
@@ -88,7 +107,7 @@ for cofactor in range(8):
             u.print()
             print(format(tweak, '02x') + ":")
             print('ff:') # Failure
-            print('00:') # dummy value for the hash
+            print(':') # dummy value for the hash
             print()
             break
 

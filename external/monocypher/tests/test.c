@@ -58,7 +58,6 @@
 #include "vectors.h"
 
 #define CHACHA_BLOCK_SIZE    64
-#define CHACHA_NB_BLOCKS     10
 #define POLY1305_BLOCK_SIZE  16
 #define BLAKE2B_BLOCK_SIZE  128
 #define SHA_512_BLOCK_SIZE  128
@@ -66,185 +65,209 @@
 ////////////////////////////
 /// Tests aginst vectors ///
 ////////////////////////////
-static void chacha20(const vector in[], vector *out)
+static void chacha20(vector_reader *reader)
 {
-    const vector *key   = in;
-    const vector *nonce = in + 1;
-    const vector *plain = in + 2;
-    u64 ctr       = load64_le(in[3].buf);
-    u64 new_ctr   = crypto_chacha20_ctr(out->buf, plain->buf, plain->size,
-                                        key->buf, nonce->buf, ctr);
-    u64 nb_blocks = plain->size / 64 + (plain->size % 64 != 0);
+    vector key       = next_input(reader);
+    vector nonce     = next_input(reader);
+    vector plain     = next_input(reader);
+    u64    ctr       = load64_le(next_input(reader).buf);
+    vector out       = next_output(reader);
+    u64    nb_blocks = plain.size / 64 + (plain.size % 64 != 0);
+    u64    new_ctr   = crypto_chacha20_ctr(out.buf, plain.buf, plain.size,
+                                            key.buf, nonce.buf, ctr);
     if (new_ctr - ctr != nb_blocks) {
         printf("FAILURE: Chacha20 returned counter not correct: ");
+        exit(1);
     }
 }
 
-static void ietf_chacha20(const vector in[], vector *out)
+static void ietf_chacha20(vector_reader *reader)
 {
-    const vector *key   = in;
-    const vector *nonce = in + 1;
-    const vector *plain = in + 2;
-    u32 ctr       = load32_le(in[3].buf);
-    u32 new_ctr   = crypto_ietf_chacha20_ctr(out->buf, plain->buf, plain->size,
-                                             key->buf, nonce->buf, ctr);
-    u32 nb_blocks = plain->size / 64 + (plain->size % 64 != 0);
+    vector key       = next_input(reader);
+    vector nonce     = next_input(reader);
+    vector plain     = next_input(reader);
+    u64    ctr       = load64_le(next_input(reader).buf);
+    vector out       = next_output(reader);
+    u32    nb_blocks = (u32)(plain.size / 64 + (plain.size % 64 != 0));
+    u32    new_ctr   = crypto_ietf_chacha20_ctr(out.buf, plain.buf, plain.size,
+                                                 key.buf, nonce.buf, ctr);
     if (new_ctr - ctr != nb_blocks) {
         printf("FAILURE: IETF Chacha20 returned counter not correct: ");
+        exit(1);
     }
 }
 
-static void hchacha20(const vector in[], vector *out)
+static void hchacha20(vector_reader *reader)
 {
-    const vector *key   = in;
-    const vector *nonce = in + 1;
-    crypto_hchacha20(out->buf, key->buf, nonce->buf);
+    vector key   = next_input(reader);
+    vector nonce = next_input(reader);
+    vector out   = next_output(reader);
+    crypto_hchacha20(out.buf, key.buf, nonce.buf);
 }
 
-static void xchacha20(const vector in[], vector *out)
+static void xchacha20(vector_reader *reader)
 {
-    const vector *key   = in;
-    const vector *nonce = in + 1;
-    const vector *plain = in + 2;
-    u64 ctr       = load64_le(in[3].buf);
-    u64 new_ctr   = crypto_xchacha20_ctr(out->buf, plain->buf, plain->size,
-                                         key->buf, nonce->buf, ctr);
-    u64 nb_blocks = plain->size / 64 + (plain->size % 64 != 0);
+    vector key       = next_input(reader);
+    vector nonce     = next_input(reader);
+    vector plain     = next_input(reader);
+    u64    ctr       = load64_le(next_input(reader).buf);
+    vector out       = next_output(reader);
+    u64    nb_blocks = plain.size / 64 + (plain.size % 64 != 0);
+    u64    new_ctr   = crypto_xchacha20_ctr(out.buf, plain.buf, plain.size,
+                                             key.buf, nonce.buf, ctr);
     if (new_ctr - ctr != nb_blocks) {
         printf("FAILURE: XChacha20 returned counter not correct: ");
+        exit(1);
     }
 }
 
-static void poly1305(const vector in[], vector *out)
+static void poly1305(vector_reader *reader)
 {
-    const vector *key = in;
-    const vector *msg = in + 1;
-    crypto_poly1305(out->buf, msg->buf, msg->size, key->buf);
+    vector key = next_input(reader);
+    vector msg = next_input(reader);
+    vector out = next_output(reader);
+    crypto_poly1305(out.buf, msg.buf, msg.size, key.buf);
 }
 
-static void aead_ietf(const vector in[], vector *out)
+static void aead_ietf(vector_reader *reader)
 {
-    const vector *key   = in;
-    const vector *nonce = in + 1;
-    const vector *ad    = in + 2;
-    const vector *text  = in + 3;
-    crypto_lock_aead(out ->buf, out->buf + 16, key->buf, nonce->buf,
-                     ad->buf, ad->size, text->buf, text->size);
+    vector key   = next_input(reader);
+    vector nonce = next_input(reader);
+    vector ad    = next_input(reader);
+    vector text  = next_input(reader);
+    vector out   = next_output(reader);
+    crypto_lock_aead(out.buf, out.buf + 16, key.buf, nonce.buf,
+                     ad.buf, ad.size, text.buf, text.size);
 }
 
 
-static void blake2b(const vector in[], vector *out)
+static void blake2b(vector_reader *reader)
 {
-    const vector *msg = in;
-    const vector *key = in + 1;
-    crypto_blake2b_general(out->buf, out->size,
-                           key->buf, key->size,
-                           msg->buf, msg->size);
+    vector msg = next_input(reader);
+    vector key = next_input(reader);
+    vector out = next_output(reader);
+    crypto_blake2b_general(out.buf, out.size,
+                           key.buf, key.size,
+                           msg.buf, msg.size);
 }
 
-static void sha512(const vector in[], vector *out)
+static void sha512(vector_reader *reader)
 {
-    crypto_sha512(out->buf, in->buf, in->size);
+    vector in  = next_input(reader);
+    vector out = next_output(reader);
+    crypto_sha512(out.buf, in.buf, in.size);
 }
 
-static void hmac_sha512(const vector in[], vector *out)
+static void hmac_sha512(vector_reader *reader)
 {
-    const vector *key = in;
-    const vector *msg = in +1;
-    crypto_hmac_sha512(out->buf, key->buf, key->size, msg->buf, msg->size);
+    vector key = next_input(reader);
+    vector msg = next_input(reader);
+    vector out = next_output(reader);
+    crypto_hmac_sha512(out.buf, key.buf, key.size, msg.buf, msg.size);
 }
 
-static void argon2i(const vector in[], vector *out)
+static void argon2i(vector_reader *reader)
 {
-    u64 nb_blocks     = load64_le(in[0].buf);
-    u64 nb_iterations = load64_le(in[1].buf);
-    const vector *password = in + 2;
-    const vector *salt     = in + 3;
-    const vector *key      = in + 4;
-    const vector *ad       = in + 5;
-
-    void *work_area = alloc(nb_blocks * 1024);
-    crypto_argon2i_general(out->buf, (u32)out->size,
+    u64    nb_blocks     = load64_le(next_input(reader).buf);
+    u64    nb_iterations = load64_le(next_input(reader).buf);
+    vector password      = next_input(reader);
+    vector salt          = next_input(reader);
+    vector key           = next_input(reader);
+    vector ad            = next_input(reader);
+    vector out           = next_output(reader);
+    void  *work_area     = alloc(nb_blocks * 1024);
+    crypto_argon2i_general(out.buf, (u32)out.size,
                            work_area, (u32)nb_blocks, (u32)nb_iterations,
-                           password->buf, (u32)password->size,
-                           salt    ->buf, (u32)salt    ->size,
-                           key     ->buf, (u32)key     ->size,
-                           ad      ->buf, (u32)ad      ->size);
+                           password.buf, (u32)password.size,
+                           salt    .buf, (u32)salt    .size,
+                           key     .buf, (u32)key     .size,
+                           ad      .buf, (u32)ad      .size);
     free(work_area);
 }
 
-static void x25519(const vector in[], vector *out)
+static void x25519(vector_reader *reader)
 {
-    const vector *scalar = in;
-    const vector *point  = in + 1;
-    crypto_x25519(out->buf, scalar->buf, point->buf);
+    vector scalar = next_input(reader);
+    vector point  = next_input(reader);
+    vector out    = next_output(reader);
+    crypto_x25519(out.buf, scalar.buf, point.buf);
 }
 
-static void x25519_pk(const vector in[], vector *out)
+static void x25519_pk(vector_reader *reader)
 {
-    crypto_x25519_public_key(out->buf, in->buf);
+    vector in  = next_input(reader);
+    vector out = next_output(reader);
+    crypto_x25519_public_key(out.buf, in.buf);
 }
 
-static void key_exchange(const vector in[], vector *out)
+static void key_exchange(vector_reader *reader)
 {
-    const vector *secret_key = in;
-    const vector *public_key = in + 1;
-    crypto_key_exchange(out->buf, secret_key->buf, public_key->buf);
+    vector secret_key = next_input(reader);
+    vector public_key = next_input(reader);
+    vector out        = next_output(reader);
+    crypto_key_exchange(out.buf, secret_key.buf, public_key.buf);
 }
 
-static void edDSA(const vector in[], vector *out)
+static void edDSA(vector_reader *reader)
 {
-    const vector *secret_k = in;
-    const vector *public_k = in + 1;
-    const vector *msg      = in + 2;
-    u8            out2[64];
+    vector secret_k = next_input(reader);
+    vector public_k = next_input(reader);
+    vector msg      = next_input(reader);
+    vector out      = next_output(reader);
+    u8     out2[64];
 
     // Sign with cached public key, then by reconstructing the key
-    crypto_sign(out->buf, secret_k->buf, public_k->buf, msg->buf, msg->size);
-    crypto_sign(out2    , secret_k->buf, 0            , msg->buf, msg->size);
+    crypto_sign(out.buf, secret_k.buf, public_k.buf, msg.buf, msg.size);
+    crypto_sign(out2   , secret_k.buf, 0           , msg.buf, msg.size);
     // Compare signatures (must be the same)
-    if (memcmp(out->buf, out2, out->size)) {
+    if (memcmp(out.buf, out2, out.size)) {
         printf("FAILURE: reconstructing public key"
                " yields different signature\n");
+        exit(1);
     }
 }
 
-static void edDSA_pk(const vector in[], vector *out)
+static void edDSA_pk(vector_reader *reader)
 {
-    crypto_sign_public_key(out->buf, in->buf);
+    vector in  = next_input(reader);
+    vector out = next_output(reader);
+    crypto_sign_public_key(out.buf, in.buf);
 }
 
-static void ed_25519(const vector in[], vector *out)
+static void ed_25519(vector_reader *reader)
 {
-    const vector *secret_k = in;
-    const vector *public_k = in + 1;
-    const vector *msg      = in + 2;
-    u8            out2[64];
+    vector secret_k = next_input(reader);
+    vector public_k = next_input(reader);
+    vector msg      = next_input(reader);
+    vector out      = next_output(reader);
+    u8     out2[64];
 
     // Sign with cached public key, then by reconstructing the key
-    crypto_ed25519_sign(out->buf, secret_k->buf, public_k->buf,
-                        msg->buf, msg->size);
-    crypto_ed25519_sign(out2    , secret_k->buf, 0,
-                        msg->buf, msg->size);
+    crypto_ed25519_sign(out.buf, secret_k.buf, public_k.buf, msg.buf, msg.size);
+    crypto_ed25519_sign(out2   , secret_k.buf, 0           , msg.buf, msg.size);
     // Compare signatures (must be the same)
-    if (memcmp(out->buf, out2, out->size)) {
+    if (memcmp(out.buf, out2, out.size)) {
         printf("FAILURE: reconstructing public key"
                " yields different signature\n");
+        exit(1);
     }
 }
 
-static void ed_25519_pk(const vector in[], vector *out)
+static void ed_25519_pk(vector_reader *reader)
 {
-    crypto_ed25519_public_key(out->buf, in->buf);
+    vector in  = next_input(reader);
+    vector out = next_output(reader);
+    crypto_ed25519_public_key(out.buf, in.buf);
 }
 
-static void ed_25519_check(const vector in[], vector *out)
+static void ed_25519_check(vector_reader *reader)
 {
-    const vector *public_k = in;
-    const vector *msg      = in + 1;
-    const vector *sig      = in + 2;
-    out->buf[0] = crypto_ed25519_check(sig->buf, public_k->buf,
-                                       msg->buf, msg->size);
+    vector public_k = next_input(reader);
+    vector msg      = next_input(reader);
+    vector sig      = next_input(reader);
+    vector out      = next_output(reader);
+    out.buf[0] = (u8)crypto_ed25519_check(sig.buf, public_k.buf,
+                                           msg.buf, msg.size);
 }
 
 static void iterate_x25519(u8 k[32], u8 u[32])
@@ -287,22 +310,23 @@ static int test_x25519()
     return status;
 }
 
-static void elligator_dir(const vector in[], vector *out)
+static void elligator_dir(vector_reader *reader)
 {
-    crypto_hidden_to_curve(out->buf, in->buf);
+    vector in  = next_input(reader);
+    vector out = next_output(reader);
+    crypto_hidden_to_curve(out.buf, in.buf);
 }
 
-static void elligator_inv(const vector in[], vector *out)
+static void elligator_inv(vector_reader *reader)
 {
-    const vector *point = in;
-    u8  tweak   = in[1].buf[0];
-    u8  failure = in[2].buf[0];
-    int check   = crypto_curve_to_hidden(out->buf, point->buf, tweak);
+    vector point   = next_input(reader);
+    u8     tweak   = next_input(reader).buf[0];
+    u8     failure = next_input(reader).buf[0];
+    vector out     = next_output(reader);
+    int    check   = crypto_curve_to_hidden(out.buf, point.buf, tweak);
     if ((u8)check != failure) {
-        fprintf(stderr, "Elligator inverse map: failure mismatch\n");
-    }
-    if (check) {
-        out->buf[0] = 0;
+        printf("Elligator inverse map: failure mismatch\n");
+        exit(1);
     }
 }
 
@@ -331,7 +355,7 @@ static int p_verify(size_t size, int (*compare)(const u8*, const u8*))
                 }
                 a[k] = (u8)i; a[k + size/2 - 1] = (u8)i;
                 b[k] = (u8)j; b[k + size/2 - 1] = (u8)j;
-                int cmp = compare(a, b);
+                cmp = compare(a, b);
                 status |= (i == j ? cmp : ~cmp);
             }
         }
@@ -510,11 +534,11 @@ static int p_blake2b()
         // Compare the results (must be the same)
         status |= memcmp(hash_chunk, hash_whole, 64);
     }
-    printf("%s: Blake2b (incremental)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: BLAKE2b (incremental)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
-// Tests that the input and output buffers of Blake2b can overlap.
+// Tests that the input and output buffers of BLAKE2b can overlap.
 static int p_blake2b_overlap()
 {
 #undef INPUT_SIZE
@@ -527,7 +551,7 @@ static int p_blake2b_overlap()
         crypto_blake2b(input+i, input + 64, BLAKE2B_BLOCK_SIZE);
         status |= memcmp(hash, input + i, 64);
     }
-    printf("%s: Blake2b (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: BLAKE2b (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -558,7 +582,7 @@ static int p_sha512()
         // Compare the results (must be the same)
         status |= memcmp(hash_chunk, hash_whole, 64);
     }
-    printf("%s: Sha512 (incremental)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: SHA-512 (incremental)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -575,7 +599,7 @@ static int p_sha512_overlap()
         crypto_sha512(input+i, input + 64, SHA_512_BLOCK_SIZE);
         status |= memcmp(hash, input + i, 64);
     }
-    printf("%s: Sha512 (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
+    printf("%s: SHA-512 (overlapping i/o)\n", status != 0 ? "FAILED" : "OK");
     return status;
 }
 
@@ -653,16 +677,17 @@ static int p_argon2i_overlap()
     u8 *clean_work_area = (u8*)alloc(8 * 1024);
     FOR (i, 0, 10) {
         p_random(work_area, 8 * 1024);
+        u32 hash_offset = rand64() % 64;
         u32 pass_offset = rand64() % 64;
         u32 salt_offset = rand64() % 64;
         u32 key_offset  = rand64() % 64;
         u32 ad_offset   = rand64() % 64;
-        u8 hash1[32];
-        u8 hash2[32];
-        u8 pass [16];  FOR (i, 0, 16) { pass[i] = work_area[i + pass_offset]; }
-        u8 salt [16];  FOR (i, 0, 16) { salt[i] = work_area[i + salt_offset]; }
-        u8 key  [32];  FOR (i, 0, 32) { key [i] = work_area[i +  key_offset]; }
-        u8 ad   [32];  FOR (i, 0, 32) { ad  [i] = work_area[i +   ad_offset]; }
+        u8  hash1[32];
+        u8 *hash2 = work_area + hash_offset;
+        u8  pass [16];  FOR (j, 0, 16) { pass[j] = work_area[j + pass_offset]; }
+        u8  salt [16];  FOR (j, 0, 16) { salt[j] = work_area[j + salt_offset]; }
+        u8  key  [32];  FOR (j, 0, 32) { key [j] = work_area[j +  key_offset]; }
+        u8  ad   [32];  FOR (j, 0, 32) { ad  [j] = work_area[j +   ad_offset]; }
 
         crypto_argon2i_general(hash1, 32, clean_work_area, 8, 1,
                                pass, 16, salt, 16, key, 32, ad, 32);
@@ -936,7 +961,7 @@ static int p_elligator_x25519()
         // Both dirty functions behave the same
         status |= memcmp(pks, pkf, 32);
 
-        // Dirty functions behave cleanly if we clear the 3 msb first
+        // Dirty functions behave cleanly if we clear the 3 lsb first
         status |= memcmp(pksc, pk1, 32);
         status |= memcmp(pkfc, pk1, 32);
 
@@ -947,7 +972,7 @@ static int p_elligator_x25519()
 
         // Maximise tweak diversity.
         // We want to set the bits 1 (sign) and 6-7 (padding)
-        u8 tweak = (i & 1) + (i << 6);
+        u8 tweak = (u8)((i & 1) + (i << 5));
         u8 r[32];
         if (crypto_curve_to_hidden(r, pkf, tweak)) {
             continue; // retry untill success (doesn't increment the tweak)
@@ -1010,13 +1035,15 @@ static int p_elligator_key_pair_overlap()
 static int p_x25519_inverse()
 {
     int status = 0;
-    const u8 base [32] = {9};
+    RANDOM_INPUT(b, 32);
+    u8 base[32];  // random point (cofactor is cleared).
+    crypto_x25519_public_key(base, b);
     // check round trip
     FOR (i, 0, 50) {
         RANDOM_INPUT(sk, 32);
         u8 pk   [32];
         u8 blind[32];
-        crypto_x25519_public_key(pk, sk);
+        crypto_x25519(pk, sk, base);
         crypto_x25519_inverse(blind, sk, pk);
         status |= memcmp(blind, base, 32);
     }
@@ -1063,7 +1090,7 @@ static int p_x25519_inverse_overlap()
     return status;
 }
 
-int p_from_eddsa()
+static int p_from_eddsa()
 {
     int status = 0;
     FOR (i, 0, 32) {
@@ -1078,7 +1105,7 @@ int p_from_eddsa()
     return status;
 }
 
-int p_from_ed25519()
+static int p_from_ed25519()
 {
     int status = 0;
     FOR (i, 0, 32) {
@@ -1093,10 +1120,10 @@ int p_from_ed25519()
     return status;
 }
 
-#define TEST(name, nb_inputs) vector_test(name, #name, nb_inputs, \
-                                          nb_##name##_vectors,    \
-                                          name##_vectors,         \
-                                          name##_sizes)
+int vector_test(void (*f)(vector_reader*),
+                const char *name, size_t nb_vectors, const char *vectors[]);
+
+#define TEST(name) vector_test(name, #name, nb_##name##_vectors, name##_vectors)
 
 int main(int argc, char *argv[])
 {
@@ -1108,28 +1135,27 @@ int main(int argc, char *argv[])
     int status = 0;
     printf("\nTest against vectors");
     printf("\n--------------------\n");
-    status |= TEST(chacha20      , 4);
-    status |= TEST(ietf_chacha20 , 4);
-    status |= TEST(hchacha20     , 2);
-    status |= TEST(xchacha20     , 4);
-    status |= TEST(poly1305      , 2);
-    status |= TEST(aead_ietf     , 4);
-    status |= TEST(blake2b       , 2);
-    status |= TEST(sha512        , 1);
-    status |= TEST(hmac_sha512   , 2);
-    status |= TEST(argon2i       , 6);
-    status |= TEST(x25519        , 2);
-    status |= TEST(x25519_pk     , 1);
-    status |= TEST(key_exchange  , 2);
-    status |= TEST(edDSA         , 3);
-    status |= TEST(edDSA_pk      , 1);
-    status |= TEST(ed_25519      , 3);
-    status |= TEST(ed_25519_pk   , 1);
-    status |= TEST(ed_25519_check, 3);
+    status |= TEST(chacha20);
+    status |= TEST(ietf_chacha20);
+    status |= TEST(hchacha20);
+    status |= TEST(xchacha20);
+    status |= TEST(poly1305);
+    status |= TEST(aead_ietf);
+    status |= TEST(blake2b);
+    status |= TEST(sha512);
+    status |= TEST(hmac_sha512);
+    status |= TEST(argon2i);
+    status |= TEST(x25519);
+    status |= TEST(x25519_pk);
+    status |= TEST(key_exchange);
+    status |= TEST(edDSA);
+    status |= TEST(edDSA_pk);
+    status |= TEST(ed_25519);
+    status |= TEST(ed_25519_pk);
+    status |= TEST(ed_25519_check);
+    status |= TEST(elligator_dir);
+    status |= TEST(elligator_inv);
     status |= test_x25519();
-    status |= TEST(elligator_dir , 1);
-    status |= TEST(elligator_inv , 3);
-
     printf("\nProperty based tests");
     printf("\n--------------------\n");
     status |= p_verify16();
@@ -1166,6 +1192,6 @@ int main(int argc, char *argv[])
     status |= p_x25519_inverse_overlap();
     status |= p_from_eddsa();
     status |= p_from_ed25519();
-     printf("\n%s\n\n", status != 0 ? "SOME TESTS FAILED" : "All tests OK!");
+    printf("\n%s\n\n", status != 0 ? "SOME TESTS FAILED" : "All tests OK!");
     return status;
 }

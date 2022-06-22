@@ -8,7 +8,7 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Copyright (c) 2019 Fabio Scotoni
+.\" Copyright (c) 2019-2020, 2022 Fabio Scotoni
 .\" All rights reserved.
 .\"
 .\"
@@ -38,7 +38,7 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Written in 2019 by Fabio Scotoni
+.\" Written in 2019-2020 and 2022 by Fabio Scotoni
 .\"
 .\" To the extent possible under law, the author(s) have dedicated all copyright
 .\" and related neighboring rights to this software to the public domain
@@ -48,18 +48,18 @@
 .\" with this software.  If not, see
 .\" <https://creativecommons.org/publicdomain/zero/1.0/>
 .\"
-.Dd December 12, 2019
+.Dd February 13, 2022
 .Dt CRYPTO_ED25519_SIGN 3MONOCYPHER
 .Os
 .Sh NAME
 .Nm crypto_ed25519_sign ,
 .Nm crypto_ed25519_check ,
-.Nm crypto_ed25519_sign_public_key
+.Nm crypto_ed25519_public_key
 .Nd public key signatures
 .Sh SYNOPSIS
 .In monocypher-ed25519.h
 .Ft void
-.Fo crypto_ed25519_sign_public_key
+.Fo crypto_ed25519_public_key
 .Fa "uint8_t public_key[32]"
 .Fa "const uint8_t secret_key[32]"
 .Fc
@@ -84,8 +84,8 @@ The
 and
 .Fn crypto_ed25519_check
 functions provide Ed25519 public key signatures and verification
-with SHA-512 as the underlying hash function;
-they are interoperable with other Ed25519 implementations.
+with SHA-512 as the underlying hash function.
+They are interoperable with other Ed25519 implementations.
 If you have no interoperability requirements, prefer
 .Xr crypto_sign 3monocypher .
 .Pp
@@ -93,10 +93,10 @@ The arguments and security considerations are the same as those
 described in
 .Xr crypto_sign 3monocypher .
 .Pp
-An incremental interface is available; see
+For an incremental interface, see
 .Xr crypto_ed25519_sign_init_first_pass 3monocypher .
 .Sh RETURN VALUES
-.Fn crypto_ed25519_sign_public_key
+.Fn crypto_ed25519_public_key
 and
 .Fn crypto_ed25519_sign
 return nothing.
@@ -105,7 +105,7 @@ return nothing.
 returns 0 for legitimate messages and -1 for forgeries.
 .Sh SEE ALSO
 .Xr crypto_check 3monocypher ,
-.Xr crypto_key_exchange 3monocypher ,
+.Xr crypto_x25519 3monocypher ,
 .Xr crypto_lock 3monocypher ,
 .Xr crypto_sha512 3monocypher ,
 .Xr intro 3monocypher
@@ -116,7 +116,7 @@ The
 .Fn crypto_ed25519_sign ,
 .Fn crypto_ed25519_check ,
 and
-.Fn crypto_ed25519_sign_public_key
+.Fn crypto_ed25519_public_key
 functions appeared in Monocypher 3.0.0.
 They replace recompilation of Monocypher with the
 .Dv ED25519_SHA512

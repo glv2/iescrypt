@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env sh
 
 # This file is dual-licensed.  Choose whichever licence you want from
 # the two licences listed below.
@@ -11,8 +11,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Copyright (c) 2020, Loup Vaillant
-# Copyright (c) 2020, Fabio Scotoni
+# Copyright (c) 2022, Loup Vaillant
 # All rights reserved.
 #
 #
@@ -42,7 +41,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Written in 2020 by Loup Vaillant and Fabio Scotoni
+# Written in 2022 by Loup Vaillant
 #
 # To the extent possible under law, the author(s) have dedicated all copyright
 # and related neighboring rights to this software to the public domain
@@ -52,33 +51,20 @@
 # with this software.  If not, see
 # <https://creativecommons.org/publicdomain/zero/1.0/>
 
-from elligator import fe
-from elligator import curve_to_hash
-from elligator import hash_to_curve
-from elligator import fast_hash_to_curve
-from elligator import p
-from elligator import print_raw
-from random    import randrange
-from random    import seed
 
-def direct(r1, padding):
-    q1 = hash_to_curve(r1)
-    q2 = fast_hash_to_curve(r1)
-    r2 = curve_to_hash(q1[0], q1[1].is_negative())
-    if q1 != q2: raise ValueError('Incorrect fast_hash_to_curve')
-    if r1 != r2: raise ValueError('Round trip failure')
-    print_raw(r1.val + padding * 2**254)
-    q1[0].print() # u coordinate only
-    print()
+# Usage:
+#   ./change-prefix.sh foobar
+#
+# The above changes the default "crypto_" prefix of all Monocypher
+# functions by the "foobar_" prefix instead.
+#
+# This can be used to avoid name clashes with other libraries.
+# This also renames the test code, so the tests should still pass.
 
-direct(fe(0), 0) # representative 0 maps to point (0, 0)
-direct(fe(0), 1) # representative 0 maps to point (0, 0)
-direct(fe(0), 2) # representative 0 maps to point (0, 0)
-direct(fe(0), 3) # representative 0 maps to point (0, 0)
+set -e
 
-# Make test vector generation deterministic, the actual randomness does
-# not matter here since these are just tests.
-seed(12345)
-
-for i in range(50):
-    direct(fe(randrange(0, (p-1)//2)), i % 4)
+find . -name "*.*"                                      \
+    | egrep    "\.(c|h)$"                               \
+    | egrep -v "^\./tests/(gen|externals|speed/speed-)" \
+    | xargs sed -i "s/crypto_/$1_/g"                    \
+            tests/externals/ed25519-donna/ed25519-hash-custom.h

@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /bin/sh
 
 # This file is dual-licensed.  Choose whichever licence you want from
 # the two licences listed below.
@@ -12,7 +12,6 @@
 # ------------------------------------------------------------------------
 #
 # Copyright (c) 2020, Loup Vaillant
-# Copyright (c) 2020, Fabio Scotoni
 # All rights reserved.
 #
 #
@@ -42,7 +41,7 @@
 #
 # ------------------------------------------------------------------------
 #
-# Written in 2020 by Loup Vaillant and Fabio Scotoni
+# Written in 2020 by Loup Vaillant
 #
 # To the extent possible under law, the author(s) have dedicated all copyright
 # and related neighboring rights to this software to the public domain
@@ -52,33 +51,64 @@
 # with this software.  If not, see
 # <https://creativecommons.org/publicdomain/zero/1.0/>
 
-from elligator import fe
-from elligator import curve_to_hash
-from elligator import hash_to_curve
-from elligator import fast_hash_to_curve
-from elligator import p
-from elligator import print_raw
-from random    import randrange
-from random    import seed
+DIR=$(dirname "$0")
+TIS_CONFIG=$DIR/../tis.config
 
-def direct(r1, padding):
-    q1 = hash_to_curve(r1)
-    q2 = fast_hash_to_curve(r1)
-    r2 = curve_to_hash(q1[0], q1[1].is_negative())
-    if q1 != q2: raise ValueError('Incorrect fast_hash_to_curve')
-    if r1 != r2: raise ValueError('Round trip failure')
-    print_raw(r1.val + padding * 2**254)
-    q1[0].print() # u coordinate only
-    print()
+echo "// auto generated with tests/gen-tis-config.sh" > $TIS_CONFIG
+echo "[" >> $TIS_CONFIG
 
-direct(fe(0), 0) # representative 0 maps to point (0, 0)
-direct(fe(0), 1) # representative 0 maps to point (0, 0)
-direct(fe(0), 2) # representative 0 maps to point (0, 0)
-direct(fe(0), 3) # representative 0 maps to point (0, 0)
+for entry_point in      \
+    "v_chacha20"        \
+    "v_ietf_chacha20"   \
+    "v_hchacha20"       \
+    "v_xchacha20"       \
+    "v_poly1305"        \
+    "v_aead_ietf"       \
+    "v_blake2b"         \
+    "v_sha512"          \
+    "v_hmac_sha512"     \
+    "v_argon2i"         \
+    "v_key_exchange"    \
+    "v_edDSA"           \
+    "v_ed_25519"        \
+    "v_ed_25519_check"  \
+    "v_elligator_dir"   \
+    "v_elligator_inv"   \
+    "p_from_eddsa"      \
+    "p_from_ed25519"    \
+    "p_dirty"           \
+    "p_x25519_inverse"  \
+    "p_verify16"        \
+    "p_verify32"        \
+    "p_verify64"
+do
+    for platform in   \
+        "sparc_32"    \
+        "x86_32"      \
+        "x86_16"      \
+        "x86_win64"   \
+        "armeb_eabi"  \
+        "arm_eabi"    \
+        "aarch64"     \
+        "rv64ifdq"    \
+        "mips_64"     \
+        "ppc_64"
+    do
+        echo '{ "name"          :' "\"$entry_point - $platform\"" >> $TIS_CONFIG
+        echo ', "files"         :'                                >> $TIS_CONFIG
+        echo '  [ "src/monocypher.c"'                             >> $TIS_CONFIG
+        echo '  , "src/optional/monocypher-ed25519.c"'            >> $TIS_CONFIG
+        echo '  , "tests/utils.c"'                                >> $TIS_CONFIG
+        echo '  , "tests/tis-ci.c"'                               >> $TIS_CONFIG
+        echo '  ]'                                                >> $TIS_CONFIG
+        echo ', "cpp-extra-args": "-Isrc -Isrc/optional -Itests"' >> $TIS_CONFIG
+        echo ', "machdep"       :' "\"$platform\""                >> $TIS_CONFIG
+        echo ', "no-results"    : true'                           >> $TIS_CONFIG
+        echo ', "main"          :' "\"$entry_point\""             >> $TIS_CONFIG
+        echo '},'                                                 >> $TIS_CONFIG
+    done
+done
+sed -i '$ d' $TIS_CONFIG
 
-# Make test vector generation deterministic, the actual randomness does
-# not matter here since these are just tests.
-seed(12345)
-
-for i in range(50):
-    direct(fe(randrange(0, (p-1)//2)), i % 4)
+echo "}" >> $TIS_CONFIG
+echo "]" >> $TIS_CONFIG

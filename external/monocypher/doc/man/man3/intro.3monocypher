@@ -8,9 +8,9 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Copyright (c) 2017-2019 Loup Vaillant
+.\" Copyright (c) 2017-2021 Loup Vaillant
 .\" Copyright (c) 2018 Michael Savage
-.\" Copyright (c) 2017, 2019-2020 Fabio Scotoni
+.\" Copyright (c) 2017, 2019-2022 Fabio Scotoni
 .\" All rights reserved.
 .\"
 .\"
@@ -40,7 +40,7 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Written in 2017-2020 by Loup Vaillant, Michael Savage and Fabio Scotoni
+.\" Written in 2017-2022 by Loup Vaillant, Michael Savage and Fabio Scotoni
 .\"
 .\" To the extent possible under law, the author(s) have dedicated all copyright
 .\" and related neighboring rights to this software to the public domain
@@ -50,7 +50,7 @@
 .\" with this software.  If not, see
 .\" <https://creativecommons.org/publicdomain/zero/1.0/>
 .\"
-.Dd March 31, 2020
+.Dd February 13, 2022
 .Dt INTRO 3MONOCYPHER
 .Os
 .Sh NAME
@@ -64,9 +64,9 @@ hashing and key derivation, key exchange, and public key signatures.
 .Xr crypto_lock 3monocypher
 and
 .Xr crypto_unlock 3monocypher
-use the Chacha20 cipher and the Poly1305 one-time authenticator.
+use the ChaCha20 cipher and the Poly1305 one-time authenticator.
 .Pp
-Chacha20 is a stream cipher based on a cryptographic hash function.
+ChaCha20 is a stream cipher based on a cryptographic hash function.
 It runs efficiently on a wide variety of hardware, and unlike AES
 naturally runs in constant time on all hardware.
 .Pp
@@ -84,8 +84,8 @@ Whenever possible,
 should be preferred, however.
 .Ss Hashing
 .Xr crypto_blake2b 3monocypher
-implements the Blake2b hash.
-Blake2b combines the security of SHA-3 and the speed of MD5.
+implements the BLAKE2b hash.
+BLAKE2b combines the security of SHA-3 and the speed of MD5.
 It is immune to length extension attacks and provides a keyed mode
 that makes it a safe, easy to use authenticator.
 .Ss Password hashing and key derivation
@@ -94,9 +94,9 @@ implements the Argon2i resource intensive hash algorithm,
 which can be used to hash passwords for storage and to derive keys
 from passwords.
 Argon2 won the password hashing competition in 2015.
-Unlike Scrypt, Argon2i is immune to timing attacks.
-.Ss Key exchange
-.Xr crypto_key_exchange 3monocypher
+Unlike scrypt, Argon2i is immune to timing attacks.
+.Ss Key exchange (Public Key Cryptography)
+.Xr crypto_x25519 3monocypher
 implements X25519, an elliptic curve Diffie Hellman key exchange
 algorithm based on Curve25519.
 X25519 derives a shared secret from two private/public key pairs.
@@ -111,9 +111,9 @@ as random noise.
 .Xr crypto_sign 3monocypher
 and
 .Xr crypto_check 3monocypher
-implement EdDSA, with Curve25519 and Blake2b.
+implement EdDSA, with Curve25519 and BLAKE2b.
 This is the same as the more famous Ed25519, with SHA-512 replaced by
-the faster and more secure Blake2b.
+the faster and more secure BLAKE2b.
 .Pp
 For highly specialised needs,
 it is possible to use a custom hash function with EdDSA;
@@ -165,7 +165,6 @@ and
 .Xr crypto_hidden_to_curve 3monocypher ,
 .Xr crypto_ietf_chacha20 3monocypher ,
 .Xr crypto_ietf_chacha20_ctr 3monocypher ,
-.Xr crypto_key_exchange 3monocypher ,
 .Xr crypto_lock 3monocypher ,
 .Xr crypto_lock_aead 3monocypher ,
 .Xr crypto_poly1305 3monocypher ,
@@ -226,7 +225,7 @@ We currently recommend the
 .Ss Random number generation
 Use the facilities of your operating system.
 Avoid user space random number generators.
-They are easy to misuse, which has lead to countless vulnerabilities
+They are easy to misuse, which has led to countless vulnerabilities
 in the past.
 For instance, the random stream may be repeated if one is not careful
 with multi-threading, and forward secrecy is lost without proper key
@@ -241,7 +240,7 @@ in
 .In linux/random.h .
 Do not set any flag.
 .It
-BSD provides
+BSD, Darwin/macOS, illumos, and Solaris provide
 .Fn arc4random_buf
 in
 .In stdlib.h
@@ -256,7 +255,7 @@ Windows provides
 .Pp
 The
 .Pa /dev/urandom
-special file may be used on systems that do not provide an easy to use
+special file may be used on systems that do not provide an easy-to-use
 system call.
 Be careful though, being a file makes
 .Pa /dev/urandom
@@ -300,11 +299,11 @@ Researchers have demonstrated an attack on HTTPS to steal session
 cookies when compression is enabled, dubbed
 .Dq CRIME .
 .Ss Forward secrecy
-Long term secrets cannot be expected to stay safe indefinitely.
+Long-term secrets cannot be expected to stay safe indefinitely.
 Users may reveal them by mistake, or the host computer might have a
 vulnerability and be compromised.
 To mitigate this problem, some protocols guarantee that past messages
-are not compromised even if the long term keys are.
+are not compromised even if the long-term keys are.
 This is done by generating temporary keys, then encrypting messages
 using them.
 .Pp
@@ -333,7 +332,7 @@ Finally, swap can be disabled locally \(en this is often the only
 way.
 .Pp
 UNIX systems can disable swap for specific buffers with
-.Fn mlock ,
+.Fn mlock
 and disable swap for the whole process with
 .Fn mlockall .
 Windows can disable swap for specific buffers with

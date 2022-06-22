@@ -8,7 +8,7 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Copyright (c) 2020 Fabio Scotoni
+.\" Copyright (c) 2020, 2022 Fabio Scotoni
 .\" All rights reserved.
 .\"
 .\"
@@ -38,7 +38,7 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Written in 2020 by Fabio Scotoni
+.\" Written in 2020 and 2022 by Fabio Scotoni
 .\"
 .\" To the extent possible under law, the author(s) have dedicated all copyright
 .\" and related neighboring rights to this software to the public domain
@@ -48,58 +48,85 @@
 .\" with this software.  If not, see
 .\" <https://creativecommons.org/publicdomain/zero/1.0/>
 .\"
-.Dd March 24, 2020
-.Dt CRYPTO_X25519_INVERSE 3MONOCYPHER
+.Dd February 13, 2022
+.Dt CRYPTO_FROM_EDDSA_PRIVATE 3MONOCYPHER
 .Os
 .Sh NAME
-.Nm crypto_x25519_inverse
-.Nd X25519 scalar multiplication with the multiplicative inverse of a scalar
+.Nm crypto_from_eddsa_private ,
+.Nm crypto_from_eddsa_public
+.Nd conversion of key pairs for EdDSA with BLAKE2b to X25519 key pairs
 .Sh SYNOPSIS
 .In monocypher.h
 .Ft void
-.Fo crypto_x25519_inverse
-.Fa "uint8_t blind_salt[32]"
-.Fa "const uint8_t private_key[32]"
-.Fa "const uint8_t curve_point"
+.Fo crypto_from_eddsa_private
+.Fa "uint8_t x25519[32]"
+.Fa "const uint8_t eddsa[32]"
+.Fc
+.Ft void
+.Fo crypto_from_eddsa_public
+.Fa "uint8_t x25519[32]"
+.Fa "const uint8_t eddsa[32]"
 .Fc
 .Sh DESCRIPTION
-The
-.Fn crypto_x25519_inverse
-function performs scalar multiplication of the multiplicative inverse
-of a scalar for X25519.
-.Sy This is a highly advanced, specialized feature ;
-unless you are implementing a protocol that requires this specifically,
-.Sy you likely have no reason to be using these functions
-and are probably looking for
-.Xr crypto_key_exchange 3monocypher
-or
+These functions convert keys for use with
+.Xr crypto_sign 3monocypher
+(EdDSA with the BLAKE2b hash function)
+to keys for use with
 .Xr crypto_x25519 3monocypher
-instead.
-Expect elliptic curve jargon on this page.
+and
+.Xr crypto_x25519 3monocypher .
+This may be useful in some resource-constrained contexts or when no
+other key is available \(en for example when retrieving SSH public keys
+from GitHub and reusing the SSH public keys as X25519 public keys.
 .Pp
-This function is used, for example, with exponential blinding in
-oblivious pseudo-random functions (OPRFs).
+The
+.Fn crypto_from_eddsa_private
+function converts an EdDSA (with BLAKE2b) private key to an X25519
+private key.
+The
+.Fn crypto_from_eddsa_public
+function converts an EdDSA public key to an X25519 public key.
+.Pp
+X25519 key pairs cannot be converted back to EdDSA key pairs.
+The conversion of private keys is specific to EdDSA with BLAKE2b because
+of the way EdDSA works.
+In particular, this means that the output of
+.Fn crypto_from_eddsa_private
+differs from
+.Xr crypto_from_ed25519_private 3monocypher
+in the optional code.
+However, the output of
+.Fn crypto_from_eddsa_public
+is identical to
+.Xr crypto_from_ed25519_public 3monocypher .
+.Pp
 The arguments are:
 .Bl -tag -width Ds
-.It Fa blind_salt
-The output point.
-.It Fa private_key
-The private key (scalar) to use.
-First, the value is clamped;
-then the clamped value's multiplicative inverse (modulo the curve order)
-is determined;
-the clamped value's multiplicative inverse then has its cofactor
-cleared,
-and that final value is then used for scalar multiplication.
-.It Fa curve_point
-The curve point on X25519 to multiply with the multiplicative inverse
-(modulo the curve order) of
-.Fa private_key .
+.It Fa eddsa
+The signing public key or private key to convert to a X25519 public key
+or private key, respectively.
+.It Fa x25519
+The converted private key or public key.
 .El
+.Pp
+The arguments may overlap or point at the same buffer.
+.Sh RETURN VALUES
+These functions return nothing.
+They cannot fail.
 .Sh SEE ALSO
 .Xr crypto_x25519 3monocypher ,
+.Xr crypto_sign_public_key 3monocypher ,
 .Xr intro 3monocypher
 .Sh HISTORY
 The
-.Fn crypto_x25519_inverse
-function first appeared in Monocypher 3.1.0.
+.Fn crypto_from_eddsa_private
+and
+.Fn crypto_from_eddsa_public
+functions first appeared in Monocypher 3.1.0.
+.Sh SECURITY CONSIDERATIONS
+It is generally considered poor form to reuse the same key for different
+purposes.
+While this conversion is technically safe,
+avoid these functions nonetheless unless you are particularly
+resource-constrained or have some other kind of hard requirement.
+It is otherwise an unnecessary risk factor.

@@ -69,10 +69,10 @@ void store64_le(u8 out[8], u64 in)
 
 u32 load32_le(const u8 s[4])
 {
-    return (u64)s[0]
-        | ((u64)s[1] <<  8)
-        | ((u64)s[2] << 16)
-        | ((u64)s[3] << 24);
+    return (u32)s[0]
+        | ((u32)s[1] <<  8)
+        | ((u32)s[2] << 16)
+        | ((u32)s[3] << 24);
 }
 
 u64 load64_le(const u8 s[8])
@@ -85,7 +85,7 @@ u64 load64_le(const u8 s[8])
 u64 random_state = 12345;
 
 // Pseudo-random 64 bit number, based on xorshift*
-u64 rand64()
+u64 rand64(void)
 {
     random_state ^= random_state >> 12;
     random_state ^= random_state << 25;
@@ -115,8 +115,6 @@ void print_number(u64 n)
     print_vector(buf, 8);
 }
 
-
-
 void* alloc(size_t size)
 {
     if (size == 0) {
@@ -133,37 +131,78 @@ void* alloc(size_t size)
     return buf;
 }
 
-int vector_test(void (*f)(const vector[], vector*),
-                const char *name, size_t nb_inputs,
-                size_t nb_vectors, u8 **vectors, size_t *sizes)
+static int to_num(char c)
 {
-    int     status   = 0;
-    int     nb_tests = 0;
-    size_t  idx      = 0;
-    vector *in;
-    in = (vector*)alloc(nb_vectors * sizeof(vector));
-    while (idx < nb_vectors) {
-        size_t out_size = sizes[idx + nb_inputs];
-        vector out;
-        out.buf  = (u8*)alloc(out_size);
-        out.size = out_size;
-        FOR (i, 0, nb_inputs) {
-            in[i].buf  = vectors[idx+i];
-            in[i].size = sizes  [idx+i];
+    return c >= '0' && c <= '9' ? c - '0'
+        :  c >= 'a' && c <= 'f' ? c - 'a' + 10
+        :                         c - 'A' + 10;
+}
+
+static vector vector_of_string(const char *s)
+{
+    vector v;
+    v.size = strlen(s) / 2;
+    v.buf  = v.size == 0 ? 0 : (u8*)alloc(v.size);
+    FOR (i, 0, v.size) {
+        int msb = to_num(*s);  s++;
+        int lsb = to_num(*s);  s++;
+        v.buf[i] = msb * 16 + lsb;
+    }
+    return v;
+}
+
+vector next_input(vector_reader *reader)
+{
+    if (reader->size == 0 || reader->nb_inputs >= 10) {
+        fprintf(stderr, "Input reader overload (no more vectors)\n");
+        exit(1);
+    }
+    const char *next = *(reader->next);
+    vector *input = reader->inputs + reader->nb_inputs;
+    reader->next++;
+    reader->size--;
+    *input = vector_of_string(next);
+    reader->nb_inputs++;
+    return *input;
+}
+
+vector next_output(vector_reader *reader)
+{
+    if (reader->size == 0 || reader->nb_inputs >= 10) {
+        fprintf(stderr, "Input reader overload (no more vectors)\n");
+        exit(1);
+    }
+    const char *next = *(reader->next);
+    reader->next++;
+    reader->size--;
+    reader->expected = vector_of_string(next);
+    reader->out.size = reader->expected.size;
+    reader->out.buf  = (u8*)alloc(reader->out.size);
+    return reader->out;
+}
+
+int vector_test(void (*f)(vector_reader*),
+                const char *name, size_t nb_vectors, const char *vectors[])
+{
+    int status   = 0;
+    int nb_tests = 0;
+    vector_reader in;
+    in.size = nb_vectors;
+    in.next = vectors;
+
+    while (in.size > 0) {
+        in.nb_inputs = 0;
+        f(&in);
+        if (in.expected.size != 0) {
+            status |= memcmp(in.out.buf, in.expected.buf, in.expected.size);
         }
-        f(in, &out);
-        vector expected;
-        expected.buf  = vectors[idx+nb_inputs];
-        expected.size = sizes  [idx+nb_inputs];
-        status |= out.size - expected.size;
-        if (out.size != 0) {
-            status |= memcmp(out.buf, expected.buf, out.size);
+        FOR (i, 0, in.nb_inputs) {
+            free(in.inputs[i].buf);
         }
-        free(out.buf);
-        idx += nb_inputs + 1;
+        free(in.out.buf);
+        free(in.expected.buf);
         nb_tests++;
     }
-    free(in);
     printf("%s %4d tests: %s\n",
            status != 0 ? "FAILED" : "OK", nb_tests, name);
     return status;

@@ -113,7 +113,7 @@ hchacha20.all.vec     : hchacha20.vec
 xchacha20.all.vec     : xchacha20.vec
 ietf_chacha20.all.vec : ietf_chacha20.vec
 aead_ietf.all.vec     : aead_ietf.vec
-blake2b.all.vec       : blake2b.vec
+blake2b.all.vec       : blake2b.vec       vectors/blake2b
 sha512.all.vec        : sha512.vec
 hmac_sha512.all.vec   : hmac_sha512.vec   vectors/hmac_sha512
 argon2i.all.vec       : argon2i.vec       vectors/argon2i
@@ -124,7 +124,7 @@ ed_25519_pk.all.vec   : ed_25519_pk.vec
 ed_25519_check.all.vec:                   vectors/ed_25519_check
 key_exchange.all.vec  :                   vectors/key_exchange
 elligator_dir.all.vec : elligator_dir.vec vectors/elligator_dir
-elligator_inv.all.vec : elligator_inv.vec
+elligator_inv.all.vec : elligator_inv.vec vectors/elligator_inv
 $(VEC2):
 	mkdir -p $(@D)
 	cat $^ > $@
@@ -135,7 +135,7 @@ $(VEC2):
 prelude.h.vec:
 	@echo "creating prelude.h.vec"
 	@echo "// Generated with hard coded official vectors, and"     >  $@
-	@echo "// random vectors with Libsodium and ed25519-donna."    >> $@
+	@echo "// random vectors with libsodium and ed25519-donna."    >> $@
 	@echo "// Download Monocypher's git repository to regenerate." >> $@
 	@echo "#include <inttypes.h>"                                  >> $@
 	@echo "#include <stddef.h>"                                    >> $@

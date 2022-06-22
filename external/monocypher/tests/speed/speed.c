@@ -85,7 +85,7 @@ static u64 authenticated(void)
     u8 mac[  16];
     RANDOM_INPUT(in   , SIZE);
     RANDOM_INPUT(key  ,   32);
-    RANDOM_INPUT(nonce,    8);
+    RANDOM_INPUT(nonce,   24);
 
     TIMING_START {
         crypto_lock(mac, out, key, nonce, in, SIZE);
@@ -118,9 +118,9 @@ static u64 sha512(void)
 
 static u64 argon2i(void)
 {
-    u64    work_area[SIZE / 8];
-    u8     hash     [32];
-    size_t nb_blocks = SIZE / 1024;
+    u64 work_area[SIZE / 8];
+    u8  hash     [32];
+    u32 nb_blocks = (u32)(SIZE / 1024);
     RANDOM_INPUT(password,  16);
     RANDOM_INPUT(salt    ,  16);
 
@@ -207,8 +207,8 @@ int main()
     print("Chacha20            ",chacha20()     *MUL ,"megabytes  per second");
     print("Poly1305            ",poly1305()     *MUL ,"megabytes  per second");
     print("Auth'd encryption   ",authenticated()*MUL ,"megabytes  per second");
-    print("Blake2b             ",blake2b()      *MUL ,"megabytes  per second");
-    print("Sha512              ",sha512()       *MUL ,"megabytes  per second");
+    print("BLAKE2b             ",blake2b()      *MUL ,"megabytes  per second");
+    print("SHA-512             ",sha512()       *MUL ,"megabytes  per second");
     print("Argon2i, 3 passes   ",argon2i()      *MUL ,"megabytes  per second");
     print("x25519              ",x25519()            ,"exchanges  per second");
     print("EdDSA(sign)         ",edDSA_sign()        ,"signatures per second");

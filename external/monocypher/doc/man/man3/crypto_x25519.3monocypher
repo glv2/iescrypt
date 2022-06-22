@@ -8,10 +8,11 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Copyright (c) 2017-2019 Loup Vaillant
+.\" Copyright (c) 2017-2021, 2022 Loup Vaillant
 .\" Copyright (c) 2017-2018 Michael Savage
-.\" Copyright (c) 2017, 2019-2020 Fabio Scotoni
+.\" Copyright (c) 2017, 2019-2020, 2022 Fabio Scotoni
 .\" Copyright (c) 2020 Richard Walmsley
+.\" Copyright (c) 2022 Samuel Lucas
 .\" All rights reserved.
 .\"
 .\"
@@ -41,8 +42,8 @@
 .\"
 .\" ----------------------------------------------------------------------------
 .\"
-.\" Written in 2017-2020 by Loup Vaillant, Michael Savage, Fabio Scotoni and
-.\" Richard Walmsley
+.\" Written in 2017-2022 by Loup Vaillant, Michael Savage, Fabio Scotoni,
+.\" Richard Walmsley and Samuel Lucas
 .\"
 .\" To the extent possible under law, the author(s) have dedicated all copyright
 .\" and related neighboring rights to this software to the public domain
@@ -52,13 +53,13 @@
 .\" with this software.  If not, see
 .\" <https://creativecommons.org/publicdomain/zero/1.0/>
 .\"
-.Dd March 31, 2020
+.Dd February 23, 2022
 .Dt CRYPTO_X25519 3MONOCYPHER
 .Os
 .Sh NAME
 .Nm crypto_x25519 ,
 .Nm crypto_x25519_public_key
-.Nd X25519 key exchange
+.Nd X25519 key exchange (Public Key Cryptography)
 .Sh SYNOPSIS
 .In monocypher.h
 .Ft void
@@ -78,15 +79,14 @@ computes a shared secret with
 .Fa your_secret_key
 and
 .Fa their_public_key .
-It is a low-level primitive.
-Use
-.Xr crypto_key_exchange 3monocypher
-unless you have a specific reason not to.
+It is a low-level primitive;
+X25519 is a building block for protocols.
+To perform a key exchange,
+use a higher level protocol,
+such as the X3DH key agreement protocol.
 .Pp
 .Fn crypto_x25519_public_key
-is the same as
-.Xr crypto_key_exchange_public_key 3monocypher .
-It deterministically computes the public key from a random secret key.
+deterministically computes the public key from a random secret key.
 .Pp
 The arguments are:
 .Bl -tag -width Ds
@@ -95,11 +95,13 @@ The shared secret, known only to those who know a relevant secret key
 (yours or theirs).
 It is not cryptographically random.
 Do not use it directly as a key.
-Hash it with
-.Xr crypto_chacha20_H 3monocypher
-or
+Hash it concatenated with
+.Fa your_public_key
+and
+.Fa their_public_key
+using
 .Xr crypto_blake2b 3monocypher
-first.
+for key derivation.
 .It Fa your_secret_key
 A 32-byte secret random number.
 See
@@ -126,11 +128,11 @@ If a protocol requires contributory behaviour,
 compare the output of
 .Fn crypto_x25519
 to an all-zero buffer using
-.Xr crypto_verify32 3monocypher ;
-abort the protocol if the output and the all-zero buffer are equal.
+.Xr crypto_verify32 3monocypher ,
+then abort the protocol if the output and the all-zero buffer are equal.
 .Pp
 Do not use the same secret key for both key exchanges and signatures.
-The public keys are different, and revealing both may leak information.
+The public keys are different and revealing both may leak information.
 If there really is no room to store or derive two different secret keys,
 consider generating a key pair for signatures and then converting it
 with
@@ -153,40 +155,56 @@ does not exist on your system, see
 for advice about how to generate cryptographically secure random bytes.
 .Pp
 Generate a pair of shared keys with your secret key and their public
-key.
-(This can help nonce management for full duplex communications.)
+key
+(this can help nonce management for full duplex communications).
 .Bd -literal -offset indent
 const uint8_t their_pk     [32]; /* Their public key          */
 uint8_t       your_sk      [32]; /* Your secret key           */
+uint8_t       your_pk      [32]; /* Your public key           */
 uint8_t       shared_secret[32]; /* Shared secret (NOT a key) */
 arc4random_buf(your_sk, 32);
+crypto_x25512(your_pk, your_sk);
 crypto_x25519(shared_secret, your_sk, their_pk);
 /* Wipe secrets if they are no longer needed */
 crypto_wipe(your_sk, 32);
 
 uint8_t shared_keys[64]; /* Two shared session keys */
-crypto_blake2b(shared_keys, shared_secret, 32);
+crypto_blake2b_ctx ctx;
+crypto_blake2b_init  (&ctx);
+crypto_blake2b_update(&ctx, shared_secret, 32);
+crypto_blake2b_update(&ctx, your_pk      , 32);
+crypto_blake2b_update(&ctx, their_pk     , 32);
+crypto_blake2b_final (&ctx, shared_keys);
 const uint8_t *key_1 = shared_keys;      /* Shared key 1 */
 const uint8_t *key_2 = shared_keys + 32; /* Shared key 2 */
 /* Wipe secrets if they are no longer needed */
 crypto_wipe(shared_secret, 32);
 .Ed
 .Sh SEE ALSO
-.Xr crypto_key_exchange 3monocypher ,
 .Xr intro 3monocypher
 .Sh STANDARDS
 This function implements X25519, described in RFC 7748.
 .Sh HISTORY
 The
-.Fn crypto_x25519 ,
+.Fn crypto_x25519
 and
 .Fn crypto_x25519_public_key
 functions first appeared in Monocypher 0.1.
 .Sh SECURITY CONSIDERATIONS
-If either of the long term secret keys leaks, it may compromise
+If either of the long-term secret keys leaks, it may compromise
 .Em all past messages .
 This can be avoided by using protocols that provide forward secrecy,
 such as the X3DH key agreement protocol.
+.Pp
+Many (private, public) key pairs produce the same shared secret.
+Therefore, not including the public keys in the key derivation can
+lead to subtle vulnerabilities.
+This can be avoided by hashing the shared secret concatenated with
+both public keys.
+For example,
+.D1 BLAKE2b(shared_secret || your_pk || their_pk)
+using
+.Xr crypto_blake2b 3monocypher .
 .Sh IMPLEMENTATION DETAILS
 The most significant bit of the public key is systematically ignored.
 It is not needed because every public key should be smaller than

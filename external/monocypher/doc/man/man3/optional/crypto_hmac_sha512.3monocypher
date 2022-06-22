@@ -97,7 +97,7 @@ The arguments are:
 .Bl -tag -width Ds
 .It Fa hmac
 The output MAC,
-which is always 64 bytes long.
+which is always 64-bytes long.
 .It Fa key
 Some secret key.
 One cannot predict the final hash without it.
@@ -138,7 +138,7 @@ which sets up a context with the hashing parameters;
 .It
 update with
 .Fn crypto_hmac_sha512_update ,
-which hashes the message chunk by chunk, and keep the intermediary
+which hashes the message chunk by chunk and keeps the intermediary
 result in the context;
 .It
 and finalisation with
@@ -163,7 +163,7 @@ the
 .Xr crypto_verify32 3monocypher ,
 and
 .Xr crypto_verify16 3monocypher
-functions can be used to to compare (possibly truncated) MACs.
+functions can be used to compare (possibly truncated) MACs.
 .Sh RETURN VALUES
 These functions return nothing.
 .Sh EXAMPLES
@@ -178,21 +178,21 @@ for advice about how to generate cryptographically secure random bytes.
 .Pp
 Computing a message authentication code all at once:
 .Bd -literal -offset indent
-uint8_t hash   [64]; /* Output hash  (between 1 and 64 bytes)  */
-uint8_t key    [32]; /* Key          (at least 1 byte)         */
+uint8_t hash   [64];                /* Output hash             */
+uint8_t key    [32];                /* Key                     */
 uint8_t message[10] = "Lorem ipsu"; /* Message to authenticate */
 arc4random_buf(key, 32);
-crypto_hmac_sha512(hash, key, 32, message, 500);
+crypto_hmac_sha512(hash, key, 32, message, 10);
 /* Wipe secrets if they are no longer needed */
-crypto_wipe(message, 500);
+crypto_wipe(message, 10);
 crypto_wipe(key, 32);
 .Ed
 .Pp
 Computing a message authentication code incrementally:
 .Bd -literal -offset indent
-uint8_t hash   [64]; /* Output hash  (between 1 and 64 bytes)  */
-uint8_t key    [32]; /* Key          (at least 1 byte)         */
-uint8_t message[500] = {1}; /* Message to authenticate         */
+uint8_t hash   [64];        /* Output hash             */
+uint8_t key    [32];        /* Key                     */
+uint8_t message[500] = {1}; /* Message to authenticate */
 crypto_hmac_sha512_ctx ctx;
 arc4random_buf(key, 32);
 crypto_hmac_sha512_init(&ctx, key, 32);
