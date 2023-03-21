@@ -1,5 +1,7 @@
 #+TITLE: iescrypt
 
+The active repository is at https://codeberg.org/glv/iescrypt
+
 The *iescrypt* program is a tool to encrypt, decrypt and sign files.
 There are two versions of it, one is written in Common Lisp, the other
 is written in C.
